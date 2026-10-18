@@ -191,6 +191,9 @@ public class FFormatArgumentData
 /// </summary>
 public class TextPropertyData : PropertyData<FString>
 {
+    // FFortniteMainBranchObjectVersion::AddDevNotesToFText is not yet in the version enum.
+    private const int AddDevNotesToFTextVersion = 260;
+
     /// <summary>Flags with various information on what sort of FText this is</summary>
     [JsonProperty]
     public ETextFlag Flags = 0;
@@ -207,6 +210,9 @@ public class TextPropertyData : PropertyData<FString>
     /// <summary>The source string for this FText. In the Unreal Engine, this is also known as SourceString.</summary>
     [JsonProperty]
     public FString CultureInvariantString = null;
+    /// <summary>Editor-only developer notes for a base text history.</summary>
+    [JsonProperty]
+    public FString DevNotes = new FString("");
 
     // OrderedFormat
     [JsonProperty]
@@ -284,6 +290,10 @@ public class TextPropertyData : PropertyData<FString>
                     Namespace = reader.ReadFString();
                     Value = reader.ReadFString(); // Key
                     CultureInvariantString = reader.ReadFString(); // SourceString
+                    if ((int)reader.Asset.GetCustomVersion<FFortniteMainBranchObjectVersion>() >= AddDevNotesToFTextVersion && !reader.Asset.IsFilterEditorOnly)
+                    {
+                        DevNotes = reader.ReadFString();
+                    }
                     break;
                 case TextHistoryType.StringTableEntry:
                     TableId = reader.ReadFName();
@@ -380,6 +390,10 @@ public class TextPropertyData : PropertyData<FString>
                     writer.Write(Namespace);
                     writer.Write(Value);
                     writer.Write(CultureInvariantString);
+                    if ((int)writer.Asset.GetCustomVersion<FFortniteMainBranchObjectVersion>() >= AddDevNotesToFTextVersion && !writer.Asset.IsFilterEditorOnly)
+                    {
+                        writer.Write(DevNotes);
+                    }
                     break;
                 case TextHistoryType.StringTableEntry:
                     writer.Write(TableId);
@@ -458,5 +472,6 @@ public class TextPropertyData : PropertyData<FString>
         cloningProperty.TableId = (FName)TableId?.Clone();
         cloningProperty.Namespace = (FString)Namespace?.Clone();
         cloningProperty.CultureInvariantString = (FString)CultureInvariantString?.Clone();
+        cloningProperty.DevNotes = (FString)DevNotes?.Clone();
     }
 }
