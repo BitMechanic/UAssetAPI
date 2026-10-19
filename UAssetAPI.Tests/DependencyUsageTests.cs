@@ -5,6 +5,8 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using UAssetAPI.ExportTypes;
+using UAssetAPI.FieldTypes;
+using UAssetAPI.PropertyTypes.Objects;
 using UAssetAPI.UnrealTypes;
 
 namespace UAssetAPI.Tests;
@@ -13,16 +15,16 @@ namespace UAssetAPI.Tests;
 public class DependencyUsageTests
 {
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "TestAssets", "TestEditorUE5_8", "Usage", "BP_Usage.uasset");
-    private static UAsset Read() => new(Fixture, EngineVersion.VER_UE5_8, customSerializationFlags: CustomSerializationFlags.SkipPreloadDependencyLoading);
-    private static JObject Document() => JObject.Parse(Read().SerializeJson());
+    private static UAsset Read(string fixture = "BP_Usage.uasset") => new(Path.Combine(Path.GetDirectoryName(Fixture), fixture), EngineVersion.VER_UE5_8, customSerializationFlags: CustomSerializationFlags.SkipPreloadDependencyLoading);
+    private static JObject Document(string fixture = "BP_Usage.uasset") => JObject.Parse(Read(fixture).SerializeJson());
     private static JObject Cdo(JObject json) => json["Exports"].OfType<JObject>().Single(e => (string)e["ObjectName"] == "Default__BP_Usage_C");
     private static JObject Property(JObject json, string name) => Cdo(json)["Data"].OfType<JObject>().Single(p => (string)p["Name"] == name);
     private static int Import(UAsset asset, string name) => asset.Imports.FindIndex(i => i.ObjectName.ToString() == name);
     private static int Package(UAsset asset, string name) => asset.SoftPackageReferenceList.FindIndex(p => p.Value == "/Game/Usage/" + name);
-    private static UAsset Edit(bool hard = true, bool soft = true)
+    private static UAsset Edit(bool hard = true, bool soft = true, string fixture = "BP_Usage.uasset")
     {
-        var json = Document();
-        if (hard) Property(json, "RuntimeHard")["Value"] = -Import(Read(), "Target") - 1;
+        var json = Document(fixture);
+        if (hard) Property(json, "RuntimeHard")["Value"] = -Import(Read(fixture), "Target") - 1;
         if (soft) Property(json, "RuntimeSoft")["Value"] = Property(json, "EditorSoft")["Value"].DeepClone();
         return UAsset.DeserializeJson(json.ToString());
     }
@@ -45,15 +47,18 @@ public class DependencyUsageTests
     }
 
     [DataTestMethod]
-    [DataRow(true, false)]
-    [DataRow(false, true)]
-    [DataRow(true, true)]
-    public void ExistingReferencesPromoteOnlyTheirRuntimeUsage(bool hard, bool soft)
+    [DataRow(true, false, "BP_Usage.uasset")]
+    [DataRow(false, true, "BP_Usage.uasset")]
+    [DataRow(true, true, "BP_Usage.uasset")]
+    [DataRow(true, false, "Transient/BP_Usage.uasset")]
+    [DataRow(false, true, "Transient/BP_Usage.uasset")]
+    [DataRow(true, true, "Transient/BP_Usage.uasset")]
+    public void ExistingReferencesPromoteOnlyTheirRuntimeUsage(bool hard, bool soft, string fixture)
     {
-        var before = Read();
+        var before = Read(fixture);
         Assert.IsFalse(before.ImportBits[Import(before, "Target")]);
         Assert.IsFalse(before.SoftPackageBits[Package(before, "Target")]);
-        var asset = Edit(hard, soft);
+        var asset = Edit(hard, soft, fixture);
         var after = RoundTrip(asset);
         Assert.AreEqual(hard, after.ImportBits[Import(after, "Target")]);
         Assert.AreEqual(hard, after.ImportBits[Import(after, "/Game/Usage/Target")]);
@@ -89,6 +94,36 @@ public class DependencyUsageTests
             CollectionAssert.AreEqual(source.AsSpan((int)original.Exports[i].SerialOffset, (int)original.Exports[i].SerialSize).ToArray(), written.AsSpan((int)asset.Exports[i].SerialOffset, (int)asset.Exports[i].SerialSize).ToArray());
         CollectionAssert.AreEqual(original.ImportBits.Cast<bool>().ToArray(), asset.ImportBits.Cast<bool>().ToArray());
         CollectionAssert.AreEqual(original.SoftPackageBits.Cast<bool>().ToArray(), asset.SoftPackageBits.Cast<bool>().ToArray());
+    }
+
+    [TestMethod]
+    public void NativeWeakCdoReferencePreservesUsageAndPayloadsOnJsonRoundTrip()
+    {
+        var original = Read("Weak/BP_Usage.uasset");
+        var field = original.Exports.OfType<ClassExport>().Single(e => e.ObjectName.ToString() == "BP_Usage_C")
+            .LoadedProperties.Single(p => p.Name.ToString() == "RuntimeHard");
+        Assert.IsInstanceOfType(field, typeof(FWeakObjectProperty));
+        var cdo = original.Exports.OfType<NormalExport>().Single(e => e.ObjectName.ToString() == "Default__BP_Usage_C");
+        var reference = (ObjectPropertyData)cdo.Data.Single(p => p.Name.ToString() == "RuntimeHard");
+        Assert.AreEqual(-Import(original, "Target") - 1, reference.Value.Index);
+        Assert.IsFalse(original.ImportBits[Import(original, "Target")]);
+        Assert.IsFalse(original.ImportBits[Import(original, "/Game/Usage/Target")]);
+
+        var asset = UAsset.DeserializeJson(original.SerializeJson());
+        using var bytes = asset.WriteData();
+        var after = new UAsset(new AssetBinaryReader(bytes, asset), EngineVersion.VER_UE5_8,
+            customSerializationFlags: CustomSerializationFlags.SkipPreloadDependencyLoading);
+        CollectionAssert.AreEqual(original.ImportBits.Cast<bool>().ToArray(), after.ImportBits.Cast<bool>().ToArray());
+        CollectionAssert.AreEqual(original.SoftPackageBits.Cast<bool>().ToArray(), after.SoftPackageBits.Cast<bool>().ToArray());
+        foreach (string table in new[] { "Imports", "SoftObjectPathList", "SoftPackageReferenceList", "DependsMap", "SearchableNames" })
+            Assert.IsTrue(JToken.DeepEquals(JObject.Parse(original.SerializeJson())[table], JObject.Parse(after.SerializeJson())[table]), table);
+        byte[] source = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Fixture), "Weak", "BP_Usage.uasset"));
+        byte[] written = bytes.ToArray();
+        for (int i = 0; i < original.Exports.Count; i++)
+            CollectionAssert.AreEqual(source.AsSpan((int)original.Exports[i].SerialOffset, (int)original.Exports[i].SerialSize).ToArray(),
+                written.AsSpan((int)after.Exports[i].SerialOffset, (int)after.Exports[i].SerialSize).ToArray());
+        using var repeat = UAsset.DeserializeJson(after.SerializeJson()).WriteData();
+        CollectionAssert.AreEqual(written, repeat.ToArray());
     }
 
     [DataTestMethod]
@@ -173,7 +208,6 @@ public class DependencyUsageTests
 
     [DataTestMethod]
     [DataRow(EPropertyFlags.CPF_EditorOnly)]
-    [DataRow(EPropertyFlags.CPF_Transient)]
     public void RuntimeFieldWithNonRuntimeDeclarationDoesNotPromote(EPropertyFlags flag)
     {
         var asset = Edit();

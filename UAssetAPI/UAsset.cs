@@ -3158,8 +3158,10 @@ namespace UAssetAPI
                 foreach (var value in cdo.Data)
                 {
                     var field = type.LoadedProperties.FirstOrDefault(p => p.Name == value.Name);
-                    if (field == null || (field.PropertyFlags & (EPropertyFlags.CPF_EditorOnly | EPropertyFlags.CPF_Transient)) != 0) continue;
-                    if (value is ObjectPropertyData hard && field is FObjectProperty && field is not FSoftObjectProperty)
+                    // Native default-object serialization includes transient properties.
+                    if (field == null || (field.PropertyFlags & EPropertyFlags.CPF_EditorOnly) != 0) continue;
+                    // Weak references do not create ordinary uncooked strong dependencies.
+                    if (value is ObjectPropertyData hard && field is FObjectProperty && field is not FSoftObjectProperty && field is not FWeakObjectProperty)
                     {
                         PromoteImport(hard.Value);
                     }
