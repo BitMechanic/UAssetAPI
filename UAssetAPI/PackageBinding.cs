@@ -1,0 +1,319 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UAssetAPI.ExportTypes;
+using UAssetAPI.PropertyTypes.Objects;
+using UAssetAPI.PropertyTypes.Structs;
+using UAssetAPI.UnrealTypes;
+
+namespace UAssetAPI
+{
+    /// <summary>
+    /// Header-level dependency manifest and identity-based rebinding of a package before native load.
+    /// Rebinding edits import identities, soft-path entries (with the parsed top-level soft values and
+    /// metadata keys that the writer maps onto them) and the soft package list. It never rewrites an
+    /// existing name-map entry and decodes no export bytes. Compatibility beyond class identity is decided
+    /// by the native compile that follows: the package must be loaded, compiled and saved natively before use.
+    /// </summary>
+    public static class PackageBinding
+    {
+        /// <summary>Import classes that must be bound or present before native load, with their package outers.</summary>
+        public static readonly IReadOnlyCollection<string> LoadCriticalClasses = new HashSet<string>
+        {
+            "Class", "BlueprintGeneratedClass", "ScriptStruct", "UserDefinedStruct", "UserDefinedEnum", "Enum", "Skeleton", "Function",
+        };
+
+        public sealed class ImportEntry
+        {
+            public int Index;
+            public string Package;
+            public string ObjectName;
+            public string ClassPackage;
+            public string ClassName;
+            /// <summary>Object names from this import up to its package.</summary>
+            public string[] OuterChain;
+            public bool LoadCritical;
+        }
+
+        public sealed class SoftPackageEntry
+        {
+            public string Package;
+            public string[] Paths;
+        }
+
+        public sealed class Manifest
+        {
+            /// <summary>The package's own name as recorded in the summary.</summary>
+            public string Package;
+            public List<ImportEntry> Imports = new();
+            public List<SoftPackageEntry> SoftPackages = new();
+        }
+
+        /// <summary>
+        /// Every import whose outer package is not /Script/, every soft package with its soft object paths,
+        /// and the package's own name. Load-critical entries are marked by import class and package outer.
+        /// </summary>
+        public static Manifest Describe(UAsset asset)
+        {
+            Import.ValidateOuterChains(asset);
+            var manifest = new Manifest { Package = asset.FolderName?.Value };
+            var entries = new List<ImportEntry>();
+            for (int i = 0; i < asset.Imports.Count; i++)
+            {
+                var chain = Chain(asset, i);
+                entries.Add(new ImportEntry
+                {
+                    Index = -i - 1,
+                    Package = asset.Imports[chain[^1]].ObjectName.ToString(),
+                    ObjectName = asset.Imports[i].ObjectName.ToString(),
+                    ClassPackage = asset.Imports[i].ClassPackage?.ToString(),
+                    ClassName = asset.Imports[i].ClassName?.ToString(),
+                    OuterChain = chain.Select(c => asset.Imports[c].ObjectName.ToString()).ToArray(),
+                    LoadCritical = LoadCriticalClasses.Contains(asset.Imports[i].ClassName?.ToString()),
+                });
+            }
+            var criticalPackages = entries.Where(e => e.LoadCritical).Select(e => e.Package).ToHashSet();
+            foreach (var e in entries)
+                if (e.ClassName == "Package" && e.OuterChain.Length == 1 && criticalPackages.Contains(e.Package)) e.LoadCritical = true;
+            manifest.Imports = entries.Where(e => !e.Package.StartsWith("/Script/", StringComparison.Ordinal)).ToList();
+            foreach (var package in asset.SoftPackageReferenceList ?? new List<FString>())
+                manifest.SoftPackages.Add(new SoftPackageEntry
+                {
+                    Package = package.Value,
+                    Paths = (asset.SoftObjectPathList ?? new List<FSoftObjectPath>()).Where(p => p.AssetPath.PackageName?.ToString() == package.Value).Select(Text).ToArray(),
+                });
+            return manifest;
+        }
+
+        /// <summary>
+        /// Rebinds exact source identities to exact destination identities. "/Pkg/Path.Object" binds one
+        /// top-level object import and its soft paths: when its package import is shared, the destination
+        /// package import is found or appended and only that object's outer is repointed; a package import
+        /// used by that object alone takes the destination package name. "/Pkg/Path" binds a whole package:
+        /// every object import under it, classes it defines and soft paths into it. Binding the package's own
+        /// name relocates its soft-path self-references. <paramref name="destinations"/> maps each destination
+        /// object path to the class read with Epic AssetTools.get_asset_class (a Blueprint reports its
+        /// generated class name). Refuses before changing anything when an identity is malformed or unknown,
+        /// a destination is absent or of another class, a user-defined struct would change identity, a bound
+        /// soft path sits inside a container property, or a load-critical import would remain neither bound
+        /// nor present. A parent with another native base passes the class check; the native compile then
+        /// rewrites the graph, so compare parent chains before binding. Repeating the same bindings is a no-op.
+        /// </summary>
+        public static void Apply(UAsset asset, IReadOnlyDictionary<string, string> bindings, IReadOnlyDictionary<string, string> destinations)
+        {
+            Import.ValidateOuterChains(asset);
+            string own = asset.FolderName?.Value;
+            var objects = new List<(string SourcePackage, string SourceObject, string Package, string Object, int Import)>();
+            var packages = new List<(string Source, string Destination)>();
+            foreach (var (source, destination) in bindings)
+            {
+                bool isPackage = Parse(source, out string sp, out string so);
+                if (isPackage != Parse(destination, out string dp, out string dob))
+                    throw new FormatException($"Binding {source} -> {destination} mixes a package and an object");
+                if (isPackage)
+                {
+                    bool known = sp == own || PackageImport(asset, sp) >= 0 || References(asset, sp, null);
+                    bool done = PackageImport(asset, dp) >= 0 || References(asset, dp, null) || dp == own;
+                    if (!known && !done) throw new FormatException($"Unknown source package {source}");
+                    if (NestedSoftValue(asset, sp, null)) throw new FormatException($"A soft path into {source} sits inside a container property; rebinding it there is not demonstrated");
+                    int moved = PackageImport(asset, sp);
+                    if (moved >= 0 && asset.Imports.Any(i => i.OuterIndex?.Index == -moved - 1 && i.ClassName?.ToString() == "UserDefinedStruct"))
+                        throw new FormatException(StructRefusal(source));
+                    if (known) packages.Add((sp, dp));
+                    continue;
+                }
+                int import = ObjectImport(asset, sp, so);
+                if (import < 0 && !References(asset, sp, so))
+                {
+                    if (ObjectImport(asset, dp, dob) >= 0 || References(asset, dp, dob)) continue; // already bound
+                    throw new FormatException($"Unknown source object {source}");
+                }
+                if (!destinations.TryGetValue(destination, out string cls))
+                    throw new FormatException($"Destination {destination} is not among the destinations");
+                if (import >= 0 && !ClassMatches(asset.Imports[import].ClassName.ToString(), dob, cls))
+                    throw new FormatException($"Destination {destination} is a {cls}, not a {asset.Imports[import].ClassName}");
+                if (import >= 0 && asset.Imports[import].ClassName.ToString() == "UserDefinedStruct")
+                    throw new FormatException(StructRefusal(source));
+                if (NestedSoftValue(asset, sp, so)) throw new FormatException($"Soft path {source} sits inside a container property; rebinding it there is not demonstrated");
+                objects.Add((sp, so, dp, dob, import));
+            }
+
+            // Every load-critical import must end bound or present among the destinations.
+            foreach (var entry in Describe(asset).Imports.Where(e => e.LoadCritical && e.ClassName != "Package"))
+            {
+                string path = entry.Package + "." + string.Join(":", entry.OuterChain.Take(entry.OuterChain.Length - 1).Reverse());
+                var moved = packages.FirstOrDefault(p => p.Source == entry.Package);
+                var bound = objects.FirstOrDefault(o => o.Import >= 0 && Chain(asset, -entry.Index - 1).Contains(o.Import));
+                string target = bound.Package != null ? bound.Package + "." + bound.Object + path.Substring(bound.SourcePackage.Length + 1 + bound.SourceObject.Length)
+                    : moved.Source != null ? moved.Destination + path.Substring(entry.Package.Length) : path;
+                if (!destinations.TryGetValue(target, out string cls))
+                    throw new FormatException($"Load-critical import {path} is neither bound nor present among the destinations");
+                if (target != path && !ClassMatches(entry.ClassName, target.Substring(target.LastIndexOfAny(new[] { '.', ':' }) + 1), cls))
+                    throw new FormatException($"Destination {target} is a {cls}, not a {entry.ClassName}");
+            }
+
+            foreach (var (sp, so, dp, dob, import) in objects)
+            {
+                if (import >= 0)
+                {
+                    int outer = -asset.Imports[import].OuterIndex.Index - 1;
+                    if (PackageImport(asset, dp) < 0 && !Shared(asset, outer, import)) asset.Imports[outer].ObjectName = Name(asset, dp);
+                    else asset.Imports[import].OuterIndex = FPackageIndex.FromImport(PackageImportOrAppend(asset, dp));
+                    asset.Imports[import].ObjectName = Name(asset, dob);
+                }
+                RebindSoftPaths(asset, sp, so, dp, dob);
+            }
+            foreach (var (sp, dp) in packages)
+            {
+                int source = PackageImport(asset, sp);
+                if (source >= 0)
+                {
+                    int existing = PackageImport(asset, dp);
+                    if (existing < 0) asset.Imports[source].ObjectName = Name(asset, dp);
+                    else foreach (var import in asset.Imports.Where(i => i.OuterIndex?.Index == -source - 1)) import.OuterIndex = FPackageIndex.FromImport(existing);
+                }
+                foreach (var import in asset.Imports)
+                {
+                    if (import.ClassPackage?.ToString() == sp) import.ClassPackage = Name(asset, dp);
+                    if (import.PackageName?.ToString() == sp) import.PackageName = Name(asset, dp);
+                }
+                RebindSoftPaths(asset, sp, null, dp, null);
+            }
+        }
+
+        // UE5.8 natively: a Blueprint variable's serialized struct value was reset to defaults, with no
+        // error or warning, both for a struct of another layout and for an independently authored struct
+        // of the same friendly layout. Bring the original struct, or set struct values after load.
+        private static string StructRefusal(string source) =>
+            $"Binding {source} changes the identity of a user-defined struct; serialized values of that struct are silently reset by the native load";
+
+        private static bool ClassMatches(string importClass, string destinationObject, string destinationClass) =>
+            importClass == "BlueprintGeneratedClass" ? destinationClass == destinationObject && destinationObject.EndsWith("_C", StringComparison.Ordinal) : destinationClass == importClass;
+
+        private static List<int> Chain(UAsset asset, int index)
+        {
+            var chain = new List<int> { index };
+            for (var outer = asset.Imports[index].OuterIndex; outer != null && outer.IsImport(); outer = asset.Imports[-outer.Index - 1].OuterIndex)
+                chain.Add(-outer.Index - 1);
+            return chain;
+        }
+
+        private static bool Parse(string identity, out string package, out string obj)
+        {
+            int dot = identity?.IndexOf('.') ?? -1;
+            package = dot < 0 ? identity : identity.Substring(0, dot);
+            obj = dot < 0 ? null : identity.Substring(dot + 1);
+            bool valid = package != null && package.Length > 1 && package[0] == '/' && !package.EndsWith("/") && !package.Contains("//") &&
+                package.All(c => c > ' ' && c != '.' && c != ':' && c != '\\' && c != '"' && c != '\'') &&
+                (obj == null || (obj.Length > 0 && obj.All(c => c > ' ' && c != '.' && c != ':' && c != '/' && c != '\\' && c != '"' && c != '\'')));
+            if (!valid) throw new FormatException($"Malformed binding identity '{identity}'");
+            return obj == null;
+        }
+
+        private static int PackageImport(UAsset asset, string package) => asset.Imports.FindIndex(i =>
+            i.ClassName?.ToString() == "Package" && (i.OuterIndex == null || i.OuterIndex.Index == 0) && i.ObjectName.ToString() == package);
+
+        private static int ObjectImport(UAsset asset, string package, string obj)
+        {
+            int outer = PackageImport(asset, package);
+            if (outer < 0) return -1;
+            var matches = Enumerable.Range(0, asset.Imports.Count).Where(i => asset.Imports[i].OuterIndex?.Index == -outer - 1 && asset.Imports[i].ObjectName.ToString() == obj).ToList();
+            if (matches.Count > 1) throw new FormatException($"Ambiguous source object {package}.{obj}");
+            return matches.Count == 1 ? matches[0] : -1;
+        }
+
+        // A package import is shared when another import lives under it or names it as its class
+        // or package; a shared package import is never rewritten on behalf of one object.
+        private static bool Shared(UAsset asset, int package, int user)
+        {
+            string name = asset.Imports[package].ObjectName.ToString();
+            return asset.Imports.Where((_, i) => i != user && i != package).Any(i =>
+                i.OuterIndex?.Index == -package - 1 || i.ClassPackage?.ToString() == name || i.PackageName?.ToString() == name);
+        }
+
+        private static int PackageImportOrAppend(UAsset asset, string package)
+        {
+            int index = PackageImport(asset, package);
+            if (index >= 0) return index;
+            var template = asset.Imports.FirstOrDefault(i => i.ClassName?.ToString() == "Package");
+            asset.Imports.Add(new Import(Name(asset, "/Script/CoreUObject"), Name(asset, "Package"), new FPackageIndex(0), Name(asset, package), false)
+            {
+                PackageName = template?.PackageName ?? Name(asset, "None"),
+            });
+            return asset.Imports.Count - 1;
+        }
+
+        private static bool References(UAsset asset, string package, string obj, bool table = false) =>
+            asset.SoftObjectPathList?.Any(p => p.AssetPath.PackageName?.ToString() == package && (obj == null || p.AssetPath.AssetName?.ToString() == obj)) == true ||
+            (!table && obj == null && asset.SoftPackageReferenceList?.Any(p => p.Value == package) == true);
+
+        private static bool Matches(FSoftObjectPath path, string package, string obj) =>
+            path.AssetPath.PackageName?.ToString() == package && (obj == null || path.AssetPath.AssetName?.ToString() == obj);
+
+        // The library holds soft references in parsed properties and package metadata by value and maps
+        // them back to table indices when writing. Top-level values are rebound with their table entry;
+        // a match inside a container property is reported so the binding can refuse.
+        private static bool NestedSoftValue(UAsset asset, string package, string obj)
+        {
+            bool Nested(IEnumerable<PropertyData> data, int depth) => (data ?? Enumerable.Empty<PropertyData>()).Any(p => p switch
+            {
+                PropertyData<FSoftObjectPath> soft => depth > 0 && Matches(soft.Value, package, obj),
+                StructPropertyData st => Nested(st.Value, depth + 1),
+                ArrayPropertyData array => Nested(array.Value, depth + 1),
+                MapPropertyData map => map.Value != null && (Nested(map.Value.Keys, depth + 1) || Nested(map.Value.Values, depth + 1)),
+                _ => false,
+            });
+            return asset.Exports.OfType<NormalExport>().Any(e => Nested(e.Data, 0));
+        }
+
+        // Exact (package, asset) entries for an object binding; every entry in the package for a package binding.
+        private static void RebindSoftPaths(UAsset asset, string sp, string so, string dp, string dob)
+        {
+            FSoftObjectPath Rebound(FSoftObjectPath path) => new(Name(asset, dp), so == null ? path.AssetPath.AssetName : Name(asset, dob), path.SubPathString);
+            bool touched = false;
+            for (int i = 0; i < (asset.SoftObjectPathList?.Count ?? 0); i++)
+            {
+                if (!Matches(asset.SoftObjectPathList[i], sp, so)) continue;
+                asset.SoftObjectPathList[i] = Rebound(asset.SoftObjectPathList[i]);
+                touched = true;
+            }
+            foreach (var export in asset.Exports.OfType<NormalExport>())
+                foreach (var soft in (export.Data ?? new List<PropertyData>()).OfType<PropertyData<FSoftObjectPath>>())
+                    if (Matches(soft.Value, sp, so)) soft.Value = Rebound(soft.Value);
+            var metadata = asset.MetaData?.ObjectMetaDataMap;
+            if (metadata != null && metadata.Keys.Any(k => Matches(k, sp, so)))
+            {
+                var items = Enumerable.Range(0, metadata.Count).Select(metadata.GetItem).ToList();
+                metadata.Clear();
+                foreach (var item in items) metadata.Add(Matches(item.Key, sp, so) ? Rebound(item.Key) : item.Key, item.Value);
+            }
+            if (asset.SoftPackageReferenceList == null) return;
+            if (so == null)
+            {
+                for (int i = 0; i < asset.SoftPackageReferenceList.Count; i++)
+                    if (asset.SoftPackageReferenceList[i].Value == sp) asset.SoftPackageReferenceList[i] = new FString(dp);
+            }
+            else if (touched && !asset.SoftPackageReferenceList.Any(p => p.Value == dp))
+            {
+                int stale = References(asset, sp, null, table: true) ? -1 : asset.SoftPackageReferenceList.FindIndex(p => p.Value == sp);
+                if (stale >= 0) asset.SoftPackageReferenceList[stale] = new FString(dp);
+                else
+                {
+                    // Conservative placeholder, as for any appended soft package; native save regenerates the list.
+                    asset.SoftPackageReferenceList.Add(new FString(dp));
+                    if (asset.SoftPackageBits != null) { asset.SoftPackageBits.Length = asset.SoftPackageReferenceList.Count; asset.SoftPackageBits[asset.SoftPackageBits.Length - 1] = true; }
+                }
+            }
+        }
+
+        private static FName Name(UAsset asset, string value)
+        {
+            var name = FName.FromString(asset, value);
+            asset.AddNameReference(name.Value);
+            return name;
+        }
+
+        private static string Text(FSoftObjectPath path) =>
+            path.AssetPath.PackageName + "." + path.AssetPath.AssetName + (string.IsNullOrEmpty(path.SubPathString?.Value) ? "" : ":" + path.SubPathString.Value);
+    }
+}

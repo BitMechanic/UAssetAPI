@@ -74,6 +74,16 @@ scope decision: a rehydrated package is loaded, compiled and saved natively befo
 use, and that save replaces every derived table. Packages written with stale and
 with corrected bits converge to identical bytes after native save.
 
+`PackageBinding.Describe` lists a package's dependency manifest (imports outside `/Script/`,
+soft packages with their paths, the package's own name) and marks load-critical entries.
+`PackageBinding.Apply` rebinds exact identities before native load without rewriting a name-map
+entry: hard references follow their import, soft references follow their table entry (parsed
+top-level soft values and metadata keys are moved with it), and a shared package import is never
+renamed on behalf of one object. Destinations carry the class read with Epic
+`AssetTools.get_asset_class`. In UE5.8.3 a struct whose identity changes loses its serialized values
+silently, so struct identity changes refuse; a parent with another native base passes the class
+check and is rewritten by the native compile, so parent chains are compared before binding.
+
 Template adaptation still requires valid graph membership and explicit dependency
 identities. General import/export remapping, automatic dependency/soft-path
 discovery, complete node-family fixtures, source animation/mesh decoding and
