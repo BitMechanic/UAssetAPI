@@ -74,12 +74,14 @@ namespace UAssetAPI.UnrealTypes
         {
             public readonly FString Dummy;
             public readonly INameMap NameMap;
+            public readonly FName Name;
 
-            public DummyFNameSerializationException(FString dummy, INameMap map)
+            public DummyFNameSerializationException(FString dummy, INameMap map, FName name = null)
                 : base($"Attempt to serialize dummy FName \"{dummy?.Value ?? "<null>"}\"")
             {
                 Dummy = dummy;
                 NameMap = map;
+                Name = name;
             }
         }
 
@@ -88,7 +90,7 @@ namespace UAssetAPI.UnrealTypes
             get
             {
                 if (IsDummy)
-                    throw new DummyFNameSerializationException(DummyValue, Asset);
+                    throw new DummyFNameSerializationException(DummyValue, Asset, this);
                 return _index;
             }
             set

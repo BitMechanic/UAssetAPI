@@ -174,6 +174,7 @@ namespace UAssetAPI.ExportTypes
 
         public override void Write(AssetBinaryWriter writer)
         {
+            long exportStart = writer.BaseStream.Position;
             // 5.4-specific problem; unclear why this occurs
             if (HasLeadingFourNullBytes && writer.Asset.ObjectVersionUE5 > ObjectVersionUE5.DATA_RESOURCES && writer.Asset.ObjectVersionUE5 < ObjectVersionUE5.ASSETREGISTRY_PACKAGEBUILDDEPENDENCIES && !ObjectFlags.HasFlag(EObjectFlags.RF_ClassDefaultObject))
             {
@@ -182,6 +183,7 @@ namespace UAssetAPI.ExportTypes
 
             FName parentName = GetClassTypeForAncestry(writer.Asset, out FName parentModulePath);
 
+            ScriptSerializationStartOffset = writer.BaseStream.Position - exportStart;
             MainSerializer.GenerateUnversionedHeader(ref Data, parentName, parentModulePath, writer.Asset)?.Write(writer);
 
             if (!writer.Asset.HasUnversionedProperties && writer.Asset.ObjectVersionUE5 >= ObjectVersionUE5.PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION)
@@ -200,6 +202,7 @@ namespace UAssetAPI.ExportTypes
                 MainSerializer.Write(current, writer, true);
             }
             if (!writer.Asset.HasUnversionedProperties) writer.Write(new FName(writer.Asset, "None"));
+            ScriptSerializationEndOffset = writer.BaseStream.Position - exportStart;
 
             if (this.ObjectFlags.HasFlag(EObjectFlags.RF_ClassDefaultObject)) return;
             if (ObjectGuid == null)

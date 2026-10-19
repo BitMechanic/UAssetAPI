@@ -1,6 +1,9 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using System;
+using System.IO;
+using System.Numerics;
+using System.Globalization;
 using UAssetAPI.CustomVersions;
 using UAssetAPI.UnrealTypes;
 using UAssetAPI.UnrealTypes.EngineEnums;
@@ -119,25 +122,25 @@ public class FFormatArgumentValue
             case EFormatArgumentType.Int:
                 if (isArgumentData && writer.Asset.GetCustomVersion<FUE5ReleaseStreamObjectVersion>() < FUE5ReleaseStreamObjectVersion.TextFormatArgumentData64bitSupport)
                 {
-                    writer.Write((int)(long)Value);
+                    writer.Write(checked((int)Convert.ToInt64(Value)));
                     sz += sizeof(int);
                 }
                 else
                 {
-                    writer.Write((long)Value);
+                    writer.Write(Convert.ToInt64(Value));
                     sz += sizeof(long);
                 }
                 break;
             case EFormatArgumentType.UInt:
-                writer.Write((ulong)Value);
+                writer.Write(Value is BigInteger big ? checked((ulong)big) : Convert.ToUInt64(Value));
                 sz += sizeof(ulong);
                 break;
             case EFormatArgumentType.Double:
-                writer.Write((double)Value);
+                writer.Write(Convert.ToDouble(Value, CultureInfo.InvariantCulture));
                 sz += sizeof(double);
                 break;
             case EFormatArgumentType.Float:
-                writer.Write((float)Value);
+                writer.Write(Convert.ToSingle(Value, CultureInfo.InvariantCulture));
                 sz += sizeof(float);
                 break;
             case EFormatArgumentType.Text:
@@ -167,21 +170,21 @@ public class FFormatArgumentData
         ArgumentValue = value;
     }
 
-    public FFormatArgumentData(AssetBinaryReader reader)
+    public FFormatArgumentData(AssetBinaryReader reader, bool isArgumentData = true)
     {
-        Read(reader);
+        Read(reader, isArgumentData);
     }
 
-    public void Read(AssetBinaryReader reader)
+    public void Read(AssetBinaryReader reader, bool isArgumentData = true)
     {
         ArgumentName = reader.ReadFString();
-        ArgumentValue = new FFormatArgumentValue(reader, true);
+        ArgumentValue = new FFormatArgumentValue(reader, isArgumentData);
     }
 
-    public int Write(AssetBinaryWriter writer)
+    public int Write(AssetBinaryWriter writer, bool isArgumentData = true)
     {
         int sz = writer.Write(ArgumentName);
-        sz += ArgumentValue.Write(writer, true);
+        sz += ArgumentValue.Write(writer, isArgumentData);
         return sz;
     }
 }
@@ -222,6 +225,9 @@ public class TextPropertyData : PropertyData<FString>
     //ArgumentFormat
     [JsonProperty]
     public FFormatArgumentData[] ArgumentsData;
+    // NamedFormat: keep native order and use FFormatArgumentValue's 64-bit layout.
+    [JsonProperty]
+    public FFormatArgumentData[] NamedArguments;
     //Transform
     [JsonProperty]
     public ETransformType TransformType;
@@ -246,6 +252,22 @@ public class TextPropertyData : PropertyData<FString>
     public override FString PropertyType => CurrentPropertyType;
 
     public override void Read(AssetBinaryReader reader, bool includeHeader, long leng1, long leng2 = 0, PropertySerializationContext serializationContext = PropertySerializationContext.Normal)
+    {
+        if (reader.TextHistoryDepth >= 64) throw new FormatException($"FText recursion limit at byte {reader.BaseStream.Position}");
+        reader.TextHistoryDepth++;
+        try { ReadText(reader, includeHeader, leng1, leng2, serializationContext); }
+        finally { reader.TextHistoryDepth--; }
+    }
+
+    private static int ReadArgumentCount(AssetBinaryReader reader)
+    {
+        int count = reader.ReadInt32();
+        if (count < 0 || count > MainSerializer.MaxSerializedArrayLength || count > reader.BaseStream.Length - reader.BaseStream.Position)
+            throw new FormatException($"Invalid FText argument count {count} at byte {reader.BaseStream.Position - 4}");
+        return count;
+    }
+
+    private void ReadText(AssetBinaryReader reader, bool includeHeader, long leng1, long leng2, PropertySerializationContext serializationContext)
     {
         if (includeHeader)
         {
@@ -279,7 +301,7 @@ public class TextPropertyData : PropertyData<FString>
                     Value = null;
                     if (reader.Asset.GetCustomVersion<FEditorObjectVersion>() >= FEditorObjectVersion.CultureInvariantTextSerializationKeyStability)
                     {
-                        bool bHasCultureInvariantString = reader.ReadInt32() == 1;
+                        bool bHasCultureInvariantString = reader.ReadBooleanInt();
                         if (bHasCultureInvariantString)
                         {
                             CultureInvariantString = reader.ReadFString();
@@ -302,10 +324,17 @@ public class TextPropertyData : PropertyData<FString>
                 case TextHistoryType.RawText:
                     Value = reader.ReadFString();
                     break;
+                case TextHistoryType.NamedFormat:
+                    SourceFmt = new TextPropertyData(FName.DefineDummy(reader.Asset, "SourceFmt"));
+                    SourceFmt.Read(reader, false, 1, 0, serializationContext);
+                    NamedArguments = new FFormatArgumentData[ReadArgumentCount(reader)];
+                    for (int i = 0; i < NamedArguments.Length; i++)
+                        NamedArguments[i] = new FFormatArgumentData(reader, false);
+                    break;
                 case TextHistoryType.OrderedFormat:
                     SourceFmt = new TextPropertyData(FName.DefineDummy(reader.Asset, "SourceFmt"));
                     SourceFmt.Read(reader, false, 1, 0, serializationContext);
-                    int ArgumentsSize = reader.ReadInt32();
+                    int ArgumentsSize = ReadArgumentCount(reader);
                     Arguments = new FFormatArgumentValue[ArgumentsSize];
                     for (int i = 0; i < ArgumentsSize; i++)
                     {
@@ -315,7 +344,7 @@ public class TextPropertyData : PropertyData<FString>
                 case TextHistoryType.ArgumentFormat:
                     SourceFmt = new TextPropertyData(FName.DefineDummy(reader.Asset, "SourceFmt"));
                     SourceFmt.Read(reader, false, 1, 0, serializationContext);
-                    ArgumentsSize = reader.ReadInt32();
+                    ArgumentsSize = ReadArgumentCount(reader);
                     ArgumentsData = new FFormatArgumentData[ArgumentsSize];
                     for (int i = 0; i < ArgumentsSize; i++)
                     {
@@ -342,6 +371,14 @@ public class TextPropertyData : PropertyData<FString>
     }
 
     public override int Write(AssetBinaryWriter writer, bool includeHeader, PropertySerializationContext serializationContext = PropertySerializationContext.Normal)
+    {
+        if (writer.TextHistoryDepth >= 64) throw new FormatException($"FText recursion limit at byte {writer.BaseStream.Position}");
+        writer.TextHistoryDepth++;
+        try { return WriteText(writer, includeHeader, serializationContext); }
+        finally { writer.TextHistoryDepth--; }
+    }
+
+    private int WriteText(AssetBinaryWriter writer, bool includeHeader, PropertySerializationContext serializationContext)
     {
         if (includeHeader)
         {
@@ -375,7 +412,7 @@ public class TextPropertyData : PropertyData<FString>
                 case TextHistoryType.None:
                     if (writer.Asset.GetCustomVersion<FEditorObjectVersion>() >= FEditorObjectVersion.CultureInvariantTextSerializationKeyStability)
                     {
-                        if (CultureInvariantString == null || string.IsNullOrEmpty(CultureInvariantString.Value))
+                        if (CultureInvariantString == null)
                         {
                             writer.Write(0);
                         }
@@ -401,6 +438,13 @@ public class TextPropertyData : PropertyData<FString>
                     break;
                 case TextHistoryType.RawText:
                     writer.Write(Value);
+                    break;
+                case TextHistoryType.NamedFormat:
+                    SourceFmt.Write(writer, false, serializationContext);
+                    if (NamedArguments == null || NamedArguments.Length > MainSerializer.MaxSerializedArrayLength)
+                        throw new FormatException("Invalid FText named arguments");
+                    writer.Write(NamedArguments.Length);
+                    foreach (var argument in NamedArguments) argument.Write(writer, false);
                     break;
                 case TextHistoryType.OrderedFormat:
                     SourceFmt.Write(writer, false, serializationContext);

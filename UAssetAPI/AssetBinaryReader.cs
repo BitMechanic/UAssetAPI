@@ -22,6 +22,7 @@ public enum ECustomVersionSerializationFormat
 /// </summary>
 public class UnrealBinaryReader : BinaryReader
 {
+    internal int TextHistoryDepth;
     public UnrealBinaryReader(Stream stream) : base(stream) { }
 
     protected byte[] ReverseIfBigEndian(byte[] data)
@@ -111,17 +112,20 @@ public class UnrealBinaryReader : BinaryReader
     public virtual FString ReadFString()
     {
         int length = this.ReadInt32();
-        if (length > MainSerializer.MaxSerializedArrayLength) throw new InvalidOperationException($"Invalid FString length: {length}"); // some parsing error is obviously occurring if we have extremely large strings
+        if (Math.Abs((long)length) > MainSerializer.MaxSerializedArrayLength)
+            throw new FormatException($"Invalid FString length {length} at byte {BaseStream.Position - 4}");
         switch (length)
         {
             case < 0:
                 var len = -length * 2;
                 Span<byte> data = len < 512 ? stackalloc byte[len] : new byte[len];
                 BaseStream.ReadExactly(data);
+                if (data[^2] != 0 || data[^1] != 0) throw new FormatException($"Unterminated UTF-16 FString at byte {BaseStream.Position - len}");
                 return new FString(Encoding.Unicode.GetString(data[..^2]), Encoding.Unicode);
             case > 0:
                 data = length < 512 ? stackalloc byte[length] : new byte[length];
                 BaseStream.ReadExactly(data);
+                if (data[^1] != 0) throw new FormatException($"Unterminated FString at byte {BaseStream.Position - length}");
                 return new FString(Encoding.UTF8.GetString(data[..^1]), Encoding.UTF8);
             default:
                 return null;

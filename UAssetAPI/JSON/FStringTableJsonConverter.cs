@@ -25,7 +25,7 @@ namespace UAssetAPI.JSON
 
             writer.WriteStartObject();
             writer.WritePropertyName("TableNamespace");
-            writer.WriteValue(realVal.TableNamespace?.Value);
+            serializer.Serialize(writer, realVal.TableNamespace);
             writer.WritePropertyName("Value");
             writer.WriteStartArray();
             foreach (object key in keys)
@@ -51,7 +51,7 @@ namespace UAssetAPI.JSON
             var dictionary = new FStringTable();
 
             JObject tableJson = JObject.Load(reader);
-            dictionary.TableNamespace = new FString(tableJson["TableNamespace"].ToObject<string>());
+            dictionary.TableNamespace = tableJson["TableNamespace"].ToObject<FString>(serializer);
             JArray tokens = (JArray)tableJson["Value"];
 
             foreach (var eachToken in tokens)

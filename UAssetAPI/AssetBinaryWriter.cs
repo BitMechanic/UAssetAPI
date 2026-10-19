@@ -78,6 +78,7 @@ namespace UAssetAPI
     /// </summary>
     public class UnrealBinaryWriter : BinaryWriter
     {
+    internal int TextHistoryDepth;
         public UnrealBinaryWriter() : base()
         {
 
@@ -168,8 +169,8 @@ namespace UAssetAPI
                     return sizeof(int);
                 default:
                     string nullTerminatedStr = value.Value + "\0";
-                    this.Write(value.Encoding is UnicodeEncoding ? -nullTerminatedStr.Length : nullTerminatedStr.Length);
                     byte[] actualStrData = value.Encoding.GetBytes(nullTerminatedStr);
+                    this.Write(value.Encoding is UnicodeEncoding ? -nullTerminatedStr.Length : actualStrData.Length);
                     this.Write(actualStrData);
                     return actualStrData.Length + 4;
             }

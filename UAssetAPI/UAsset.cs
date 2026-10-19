@@ -1049,7 +1049,9 @@ namespace UAssetAPI
                         }
                         else
                         {
-                            Exports[i] = Exports[i].ConvertToChildExport<NormalExport>();
+                            Exports[i] = EdGraphNodeExport.Supports(Exports[i])
+                                ? Exports[i].ConvertToChildExport<EdGraphNodeExport>()
+                                : Exports[i].ConvertToChildExport<NormalExport>();
                         }
                         break;
                 }
@@ -2613,6 +2615,24 @@ namespace UAssetAPI
         /// <returns>A new MemoryStream containing the full binary data of the serialized asset.</returns>
         public virtual MemoryStream WriteData()
         {
+            // JSON may introduce FNames absent from the source map. Bind only
+            // names the native writer actually uses; property array labels and
+            // other JSON-only dummy names must not change an unchanged package.
+            while (true)
+            {
+                try { return WriteDataOnce(); }
+                catch (FName.DummyFNameSerializationException ex) when (ex.NameMap == this && ex.Name != null)
+                {
+                    var name = FName.FromString(this, ex.Dummy.Value);
+                    ex.Name.Value = name.Value;
+                    ex.Name.Number = name.Number;
+                }
+            }
+        }
+
+        private MemoryStream WriteDataOnce()
+        {
+            EdGraphNodeExport.ValidatePins(this);
             isSerializationTime = true;
 
             // resolve ancestries
@@ -3063,6 +3083,11 @@ namespace UAssetAPI
 
                 writer.Seek(0, SeekOrigin.Begin);
             }
+            catch
+            {
+                stre?.Dispose();
+                throw;
+            }
             finally
             {
                 isSerializationTime = false;
@@ -3142,10 +3167,15 @@ namespace UAssetAPI
             }
             else
             {
-                using (FileStream f = File.Open(outputPath, FileMode.Create, FileAccess.Write))
+                string destination = Path.GetFullPath(outputPath);
+                string temporary = Path.Combine(Path.GetDirectoryName(destination), "." + Path.GetFileName(destination) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+                try
                 {
-                    newData.CopyTo(f);
+                    using (FileStream f = File.Open(temporary, FileMode.CreateNew, FileAccess.Write))
+                        newData.CopyTo(f);
+                    File.Move(temporary, destination, true);
                 }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
             }
         }
 
@@ -3202,6 +3232,7 @@ namespace UAssetAPI
             T res = JsonConvert.DeserializeObject<T>(json, new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.Objects,
+                SerializationBinder = new UAssetJsonBinder(typeof(T)),
                 NullValueHandling = NullValueHandling.Include,
                 FloatParseHandling = FloatParseHandling.Double,
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
@@ -3250,6 +3281,7 @@ namespace UAssetAPI
             UAsset res = JsonConvert.DeserializeObject<UAsset>(json, new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.Objects,
+                SerializationBinder = new UAssetJsonBinder(typeof(UAsset)),
                 NullValueHandling = NullValueHandling.Include,
                 FloatParseHandling = FloatParseHandling.Double,
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
@@ -3301,6 +3333,7 @@ namespace UAssetAPI
             var serializer = JsonSerializer.Create(new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.Objects,
+                SerializationBinder = new UAssetJsonBinder(typeof(UAsset)),
                 NullValueHandling = NullValueHandling.Include,
                 FloatParseHandling = FloatParseHandling.Double,
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
@@ -3347,6 +3380,7 @@ namespace UAssetAPI
             toBeFilled.Clear();
 
             foreach (Export ex in res.Exports) ex.Asset = res;
+            res.ResolveAncestries();
             return res;
         }
 
