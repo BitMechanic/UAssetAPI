@@ -165,7 +165,7 @@ namespace UAssetAPI.ExportTypes
             for (int i = 0; i < FuncMap.Count; i++)
             {
                 writer.Write(FuncMap.Keys.ElementAt(i));
-                writer.Write(FuncMap[i].Index);
+                FuncMap[i].Write(writer);
             }
 
             EClassFlags serializingClassFlags = ClassFlags;
@@ -175,7 +175,7 @@ namespace UAssetAPI.ExportTypes
             }
             writer.Write((uint)serializingClassFlags);
 
-            writer.Write(ClassWithin.Index);
+            ClassWithin.Write(writer);
             writer.Write(ClassConfigName);
 
             if (Asset.ObjectVersion < ObjectVersion.VER_UE4_UCLASS_SERIALIZE_INTERFACES_AFTER_LINKING)
@@ -184,7 +184,7 @@ namespace UAssetAPI.ExportTypes
             }
 
             // Linking procedure here; I don't think anything is really serialized during this
-            writer.Write(ClassGeneratedBy.Index);
+            ClassGeneratedBy.Write(writer);
 
             if (Asset.ObjectVersion >= ObjectVersion.VER_UE4_UCLASS_SERIALIZE_INTERFACES_AFTER_LINKING)
             {
@@ -200,15 +200,15 @@ namespace UAssetAPI.ExportTypes
                 writer.WriteBooleanInt(bCooked);
             }
 
-            writer.Write(ClassDefaultObject.Index);
+            ClassDefaultObject.Write(writer);
         }
 
-        private void SerializeInterfaces(UnrealBinaryWriter writer)
+        private void SerializeInterfaces(AssetBinaryWriter writer)
         {
             writer.Write(Interfaces.Length);
             for (int i = 0; i < Interfaces.Length; i++)
             {
-                writer.Write(Interfaces[i].Class);
+                new FPackageIndex(Interfaces[i].Class).Write(writer);
                 writer.Write(Interfaces[i].PointerOffset);
                 writer.WriteBooleanInt(Interfaces[i].bImplementedByK2);
             }

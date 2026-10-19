@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using System;
+using System.ComponentModel;
 using UAssetAPI.ExportTypes;
 using UAssetAPI.JSON;
 
@@ -15,6 +16,7 @@ namespace UAssetAPI.UnrealTypes;
 /// The actual array index will be (-FPackageIndex - 1)
 /// </summary>
 [JsonConverter(typeof(FPackageIndexJsonConverter))]
+[TypeConverter(typeof(FPackageIndexTypeConverter))]
 public class FPackageIndex : IComparable
 {
     /// <summary>
@@ -168,10 +170,15 @@ public class FPackageIndex : IComparable
 
     public int Write(AssetBinaryWriter writer)
     {
-        if ((writer.Asset.Exports != null && Index > writer.Asset.Exports.Count) ||
-            (writer.Asset.Imports != null && Index < -writer.Asset.Imports.Count))
-            throw new FormatException($"Package reference {Index} at byte {writer.BaseStream.Position} is outside the import/export tables");
+        Validate(writer.Asset, writer.BaseStream.Position);
         writer.Write(Index);
         return sizeof(int);
+    }
+
+    internal void Validate(UAsset asset, long? position = null)
+    {
+        if ((asset.Exports != null && Index > asset.Exports.Count) ||
+            (asset.Imports != null && Index < -asset.Imports.Count))
+            throw new FormatException($"Package reference {Index}{(position.HasValue ? $" at byte {position}" : "")} is outside the import/export tables");
     }
 }

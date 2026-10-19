@@ -136,7 +136,7 @@ namespace UAssetAPI.ExportTypes
         {
             base.Write(writer);
 
-            writer.Write(SuperStruct.Index);
+            SuperStruct.Write(writer);
 
             if (Asset.GetCustomVersion<FFrameworkObjectVersion>() < FFrameworkObjectVersion.RemoveUField_Next)
             {
@@ -146,7 +146,7 @@ namespace UAssetAPI.ExportTypes
                 }
                 else
                 {
-                    writer.Write(Children[0].Index);
+                    Children[0].Write(writer);
                 }
             }
             else
@@ -154,7 +154,7 @@ namespace UAssetAPI.ExportTypes
                 writer.Write(Children.Length);
                 for (int i = 0; i < Children.Length; i++)
                 {
-                    writer.Write(Children[i].Index);
+                    Children[i].Write(writer);
                 }
             }
 

@@ -249,13 +249,13 @@ namespace UAssetAPI.ExportTypes
         {
             Asset = writer.Asset;
 
-            writer.Write(ClassIndex?.Index ?? 0);
-            writer.Write(SuperIndex?.Index ?? 0);
+            (ClassIndex ?? new FPackageIndex()).Write(writer);
+            (SuperIndex ?? new FPackageIndex()).Write(writer);
             if (Asset.ObjectVersion >= ObjectVersion.VER_UE4_TemplateIndex_IN_COOKED_EXPORTS)
             {
-                writer.Write(TemplateIndex?.Index ?? 0);
+                (TemplateIndex ?? new FPackageIndex()).Write(writer);
             }
-            writer.Write(OuterIndex?.Index ?? 0);
+            (OuterIndex ?? new FPackageIndex()).Write(writer);
             writer.Write(ObjectName);
             writer.Write((uint)ObjectFlags);
             if (Asset.ObjectVersion < ObjectVersion.VER_UE4_64BIT_EXPORTMAP_SERIALSIZES)
@@ -352,9 +352,13 @@ namespace UAssetAPI.ExportTypes
         {
             modulePath = null;
             if (classIndex.IsNull()) return null;
+            // JSON ancestry resolution precedes native writing. Check before
+            // dereferencing here as well as when publishing the export map.
+            classIndex.Validate(asset);
             if (classIndex.IsExport()) return classIndex.ToExport(asset).ObjectName;
 
             var imp = classIndex.ToImport(asset);
+            imp.OuterIndex.Validate(asset);
             if (imp.OuterIndex.IsImport()) modulePath = imp.OuterIndex.ToImport(asset).ObjectName;
             return imp.ObjectName;
         }

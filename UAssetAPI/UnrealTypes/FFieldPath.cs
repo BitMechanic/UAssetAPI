@@ -54,7 +54,7 @@ public class FFieldPath : IStruct<FFieldPath>
             writer.Write(name);
         }
 
-        writer.Write(ResolvedOwner.Index);
+        ResolvedOwner.Write(writer);
         return sizeof(int) * (2 + Path.Length * 2);
     }
 

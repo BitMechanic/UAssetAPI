@@ -2817,7 +2817,7 @@ namespace UAssetAPI
                         writer.Write(currentData.Length);
                         for (int j = 0; j < currentData.Length; j++)
                         {
-                            writer.Write(currentData[j]);
+                            new FPackageIndex(currentData[j]).Write(writer);
                         }
                     }
                 }
@@ -2857,7 +2857,7 @@ namespace UAssetAPI
                         var searchableNamesCollectionIndex = searchableNamesCollectionPair.Key;
                         var searchableNamesCollectionContent = searchableNamesCollectionPair.Value;
 
-                        writer.Write(searchableNamesCollectionIndex.Index);
+                        searchableNamesCollectionIndex.Write(writer);
                         writer.Write(searchableNamesCollectionContent.Count);
 
                         for (int j = 0; j < searchableNamesCollectionContent.Count; j++)
@@ -3006,16 +3006,16 @@ namespace UAssetAPI
                         Exports[i].FirstExportDependencyOffset = this.PreloadDependencyCount;
 
                         Exports[i].SerializationBeforeSerializationDependenciesSize = Exports[i].SerializationBeforeSerializationDependencies.Count;
-                        for (int j = 0; j < Exports[i].SerializationBeforeSerializationDependenciesSize; j++) writer.Write(Exports[i].SerializationBeforeSerializationDependencies[j].Index);
+                        for (int j = 0; j < Exports[i].SerializationBeforeSerializationDependenciesSize; j++) Exports[i].SerializationBeforeSerializationDependencies[j].Write(writer);
 
                         Exports[i].CreateBeforeSerializationDependenciesSize = Exports[i].CreateBeforeSerializationDependencies.Count;
-                        for (int j = 0; j < Exports[i].CreateBeforeSerializationDependenciesSize; j++) writer.Write(Exports[i].CreateBeforeSerializationDependencies[j].Index);
+                        for (int j = 0; j < Exports[i].CreateBeforeSerializationDependenciesSize; j++) Exports[i].CreateBeforeSerializationDependencies[j].Write(writer);
 
                         Exports[i].SerializationBeforeCreateDependenciesSize = Exports[i].SerializationBeforeCreateDependencies.Count;
-                        for (int j = 0; j < Exports[i].SerializationBeforeCreateDependenciesSize; j++) writer.Write(Exports[i].SerializationBeforeCreateDependencies[j].Index);
+                        for (int j = 0; j < Exports[i].SerializationBeforeCreateDependenciesSize; j++) Exports[i].SerializationBeforeCreateDependencies[j].Write(writer);
 
                         Exports[i].CreateBeforeCreateDependenciesSize = Exports[i].CreateBeforeCreateDependencies.Count;
-                        for (int j = 0; j < Exports[i].CreateBeforeCreateDependenciesSize; j++) writer.Write(Exports[i].CreateBeforeCreateDependencies[j].Index);
+                        for (int j = 0; j < Exports[i].CreateBeforeCreateDependenciesSize; j++) Exports[i].CreateBeforeCreateDependencies[j].Write(writer);
 
                         this.PreloadDependencyCount +=
                             Exports[i].SerializationBeforeSerializationDependencies.Count +

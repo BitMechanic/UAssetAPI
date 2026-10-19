@@ -147,7 +147,7 @@ namespace UAssetAPI.FieldTypes
         {
             base.Write(writer);
 
-            writer.Write(Enum.Index);
+            Enum.Write(writer);
             MainSerializer.WriteFProperty(UnderlyingProp, writer);
         }
     }
@@ -200,7 +200,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(PropertyClass.Index);
+            PropertyClass.Write(writer);
         }
     }
 
@@ -228,7 +228,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(MetaClass.Index);
+            MetaClass.Write(writer);
         }
     }
 
@@ -246,7 +246,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(MetaClass.Index);
+            MetaClass.Write(writer);
         }
     }
 
@@ -264,7 +264,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(SignatureFunction.Index);
+            SignatureFunction.Write(writer);
         }
     }
 
@@ -292,7 +292,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(InterfaceClass.Index);
+            InterfaceClass.Write(writer);
         }
     }
 
@@ -369,7 +369,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(Enum.Index);
+            Enum.Write(writer);
         }
     }
 
@@ -387,7 +387,7 @@ namespace UAssetAPI.FieldTypes
         public override void Write(AssetBinaryWriter writer)
         {
             base.Write(writer);
-            writer.Write(Struct.Index);
+            Struct.Write(writer);
         }
     }
 
