@@ -65,8 +65,7 @@ public class ObjectPropertyData : PropertyData<FPackageIndex>
             this.WriteEndPropertyTag(writer);
         }
 
-        writer.Write(Value.Index);
-        return sizeof(int);
+        return Value.Write(writer);
     }
 
     public override string ToString()

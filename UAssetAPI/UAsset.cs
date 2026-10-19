@@ -2768,7 +2768,7 @@ namespace UAssetAPI
                     {
                         writer.Write(this.Imports[i].ClassPackage);
                         writer.Write(this.Imports[i].ClassName);
-                        writer.Write(this.Imports[i].OuterIndex.Index);
+                        this.Imports[i].OuterIndex.Write(writer);
                         writer.Write(this.Imports[i].ObjectName);
                         if (writer.Asset.ObjectVersion >= ObjectVersion.VER_UE4_NON_OUTER_PACKAGE_IMPORT
                             && !writer.Asset.IsFilterEditorOnly)
@@ -2953,6 +2953,14 @@ namespace UAssetAPI
                         writer.Write(AssetRegistryDependencyDataOffset);
                         writer.BaseStream.Seek(AssetRegistryDependencyDataOffset, SeekOrigin.Begin);
 
+                        if (ImportBits == null || ImportBits.Count > Imports.Count)
+                            throw new FormatException("Import dependency bits do not match the import table");
+                        // Appended imports keep every old index/flag. Native collection
+                        // scopes are not available here; conservatively include new slots
+                        // in game dependencies rather than write an invalid short array.
+                        int oldImportBits = ImportBits.Count;
+                        ImportBits.Length = Imports.Count;
+                        for (int i = oldImportBits; i < ImportBits.Count; i++) ImportBits[i] = true;
                         WriteBitArray(writer, ImportBits);
                         WriteBitArray(writer, SoftPackageBits);
 

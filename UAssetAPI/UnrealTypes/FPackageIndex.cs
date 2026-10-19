@@ -168,6 +168,9 @@ public class FPackageIndex : IComparable
 
     public int Write(AssetBinaryWriter writer)
     {
+        if ((writer.Asset.Exports != null && Index > writer.Asset.Exports.Count) ||
+            (writer.Asset.Imports != null && Index < -writer.Asset.Imports.Count))
+            throw new FormatException($"Package reference {Index} at byte {writer.BaseStream.Position} is outside the import/export tables");
         writer.Write(Index);
         return sizeof(int);
     }
