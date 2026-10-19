@@ -30,9 +30,14 @@ namespace UAssetAPI.ExportTypes
 
         public override void Write(AssetBinaryWriter writer)
         {
+            long exportStart = writer.BaseStream.Position;
             writer.Write(Json);
+            long prefix = writer.BaseStream.Position - exportStart;
 
             base.Write(writer);
+            // Script offsets are relative to the export start, which precedes the native Json prefix.
+            ScriptSerializationStartOffset += prefix;
+            ScriptSerializationEndOffset += prefix;
         }
     }
 }

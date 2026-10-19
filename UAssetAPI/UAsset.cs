@@ -60,6 +60,10 @@ namespace UAssetAPI
                 super.Write(writer);
         }
 
+        public FImportTypeHierarchy()
+        {
+        }
+
         public FImportTypeHierarchy(AssetBinaryReader reader)
         {
             SuperTypes = reader.ReadArray(() => new FTypeResource(reader));
@@ -2006,8 +2010,13 @@ namespace UAssetAPI
                 }
             }
 
-            // Gatherable text
-            if (GatherableTextDataOffset > 0 && GatherableTextDataCount > 0)
+            // Gatherable text. The engine places the section, possibly empty, whenever the
+            // package qualifies for the gather cache; keep an empty section so JSON carries it.
+            if (GatherableTextDataOffset > 0 && GatherableTextDataCount == 0)
+            {
+                GatherableTextData = new List<FGatherableTextData>();
+            }
+            else if (GatherableTextDataOffset > 0 && GatherableTextDataCount > 0)
             {
                 reader.BaseStream.Seek(GatherableTextDataOffset, SeekOrigin.Begin);
 
@@ -2339,10 +2348,20 @@ namespace UAssetAPI
                 }
             }
 
+            // As FLinkerLoad::SerializeImportTypeHierarchies: a zero summary count skips the
+            // stream; otherwise the stream starts with its own count, which must match.
             if (ImportTypeHierarchiesOffset > 0)
             {
-                reader.BaseStream.Seek(ImportTypeHierarchiesOffset, SeekOrigin.Begin);
-                ImportTypeHierarchies = reader.ReadMap(ImportTypeHierarchiesCount, () => new FPackageIndex(reader), () => new FImportTypeHierarchy(reader));
+                if (ImportTypeHierarchiesCount < 0) throw new FormatException("Import type hierarchy count " + ImportTypeHierarchiesCount + " is negative");
+                ImportTypeHierarchies = new TMap<FPackageIndex, FImportTypeHierarchy>();
+                if (ImportTypeHierarchiesCount > 0)
+                {
+                    reader.BaseStream.Seek(ImportTypeHierarchiesOffset, SeekOrigin.Begin);
+                    int streamCount = reader.ReadInt32();
+                    if (streamCount != ImportTypeHierarchiesCount)
+                        throw new FormatException("Import type hierarchy stream count " + streamCount + " does not match the summary count " + ImportTypeHierarchiesCount);
+                    ImportTypeHierarchies = reader.ReadMap(ImportTypeHierarchiesCount, () => new FPackageIndex(reader), () => new FImportTypeHierarchy(reader));
+                }
             }
 
             // Thumbnails
@@ -2877,6 +2896,8 @@ namespace UAssetAPI
                     ImportTypeHierarchiesOffset = (int)writer.BaseStream.Position;
                     ImportTypeHierarchiesCount = ImportTypeHierarchies.Count;
 
+                    // The engine writes the map with its own count, even when empty.
+                    writer.Write(ImportTypeHierarchiesCount);
                     foreach (var kvp in ImportTypeHierarchies)
                     {
                         kvp.Key.Write(writer);
