@@ -2679,7 +2679,6 @@ namespace UAssetAPI
         private MemoryStream WriteDataOnce()
         {
             EdGraphNodeExport.ValidatePins(this);
-            PromoteDeclaredCdoDependencies();
             isSerializationTime = true;
 
             // resolve ancestries
@@ -2782,6 +2781,7 @@ namespace UAssetAPI
                 // Imports
                 if (this.Imports.Count > 0)
                 {
+                    Import.ValidateOuterChains(this);
                     this.ImportOffset = (int)writer.BaseStream.Position;
                     this.ImportCount = this.Imports.Count;
                     for (int i = 0; i < this.Imports.Count; i++)
@@ -2977,6 +2977,8 @@ namespace UAssetAPI
 
                         if (ImportBits == null || ImportBits.Count > Imports.Count)
                             throw new FormatException("Import dependency bits do not match the import table");
+                        if (SoftPackageBits == null || SoftPackageBits.Count != (SoftPackageReferenceList?.Count ?? 0))
+                            throw new FormatException("Soft package dependency bits do not match the package reference list");
                         // Appended imports keep every old index/flag. Native collection
                         // scopes are not available here; conservatively include new slots
                         // in game dependencies rather than write an invalid short array.
@@ -3156,83 +3158,6 @@ namespace UAssetAPI
 #else
             return (MemoryStream)stre;
 #endif
-        }
-
-        // A path/import's presence in the tables does not imply game usage. Use
-        // the declarations we actually have, rather than collecting editor data
-        // or guessing inherited native property/custom serialization scopes.
-        private void PromoteDeclaredCdoDependencies()
-        {
-            if (!doWeHaveAssetRegistryData || IsPreDependencyFormat) return;
-            if (ImportBits == null || ImportBits.Count > Imports.Count)
-                throw new FormatException("Import dependency bits do not match the import table");
-            if (SoftPackageBits == null || SoftPackageBits.Count != (SoftPackageReferenceList?.Count ?? 0))
-                throw new FormatException("Soft package dependency bits do not match the package reference list");
-
-            foreach (var cdo in Exports.OfType<NormalExport>())
-            {
-                if (!cdo.ObjectFlags.HasFlag(EObjectFlags.RF_ClassDefaultObject) ||
-                    (cdo.bNotForClient && cdo.bNotForServer) || cdo.Data == null || cdo.ClassIndex?.IsExport() != true) continue;
-                cdo.ClassIndex.Validate(this);
-                if (cdo.ClassIndex.ToExport(this) is not ClassExport type || type.LoadedProperties == null) continue;
-
-                foreach (var value in cdo.Data)
-                {
-                    var field = type.LoadedProperties.FirstOrDefault(p => p.Name == value.Name);
-                    // Native default-object serialization includes transient properties.
-                    if (field == null || (field.PropertyFlags & EPropertyFlags.CPF_EditorOnly) != 0) continue;
-                    // Weak references do not create ordinary uncooked strong dependencies.
-                    if (value is ObjectPropertyData hard && field is FObjectProperty && field is not FSoftObjectProperty && field is not FWeakObjectProperty)
-                    {
-                        PromoteImport(hard.Value);
-                    }
-                    else if (value is SoftObjectPropertyData soft && field is FSoftObjectProperty &&
-                        field.MetaDataMap?.Any(p => string.Equals(p.Key.ToString(), "Untracked", StringComparison.OrdinalIgnoreCase)) != true &&
-                        SoftObjectPathList?.Contains(soft.Value) == true)
-                    {
-                        string package = soft.Value.AssetPath.PackageName?.ToString();
-                        string name = soft.Value.AssetPath.AssetName?.ToString();
-                        if (string.IsNullOrEmpty(package) || package == "None" || string.IsNullOrEmpty(name) || name == "None") continue;
-                        SoftPackageReferenceList ??= new List<FString>();
-                        int index = SoftPackageReferenceList.FindIndex(p => p?.Value == package);
-                        if (index < 0)
-                        {
-                            index = SoftPackageReferenceList.Count;
-                            SoftPackageReferenceList.Add(new FString(package));
-                            SoftPackageBits.Length = SoftPackageReferenceList.Count;
-                        }
-                        SoftPackageBits[index] = true;
-                    }
-                }
-            }
-        }
-
-        private void PromoteImport(FPackageIndex reference)
-        {
-            var visited = new HashSet<int>();
-            while (reference?.IsImport() == true)
-            {
-                reference.Validate(this);
-                int index = -reference.Index - 1;
-                // Appended slots retain their separately qualified conservative
-                // initialization at the dependency-table write below.
-                if (index >= ImportBits.Count) return;
-                if (!visited.Add(index)) throw new FormatException("Cyclic import outer chain in runtime dependency");
-                Import import = Imports[index];
-                if (!ImportBits[index])
-                {
-                    // ProcessImport also harvests nonnative classes and external
-                    // packages. Their discovery is not available from this chain.
-                    if (import.ClassPackage?.ToString().StartsWith("/Script/", StringComparison.Ordinal) != true ||
-                        (!string.IsNullOrEmpty(import.PackageName?.ToString()) && import.PackageName.ToString() != "None"))
-                        throw new FormatException("Runtime dependency promotion requires nonnative class or external package discovery");
-                    ImportBits[index] = true;
-                }
-                reference = import.OuterIndex;
-                reference?.Validate(this);
-                if (reference?.IsExport() == true)
-                    throw new FormatException("Runtime import dependency has an export outer");
-            }
         }
 
         private static void WriteBitArray(AssetBinaryWriter writer, BitArray bitArray)

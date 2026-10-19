@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UAssetAPI.UnrealTypes;
 
 namespace UAssetAPI
@@ -55,6 +57,22 @@ namespace UAssetAPI
         public Import()
         {
 
+        }
+
+        /// <summary>
+        /// Refuses out-of-table or cyclic outer chains among imports; the loader follows them recursively.
+        /// </summary>
+        internal static void ValidateOuterChains(UAsset asset)
+        {
+            for (int i = 0; i < asset.Imports.Count; i++)
+            {
+                var visited = new HashSet<int> { i };
+                for (var outer = asset.Imports[i].OuterIndex; outer != null && outer.IsImport(); outer = asset.Imports[-outer.Index - 1].OuterIndex)
+                {
+                    outer.Validate(asset);
+                    if (!visited.Add(-outer.Index - 1)) throw new FormatException("Cyclic import outer chain at import " + (-i - 1));
+                }
+            }
         }
     }
 }

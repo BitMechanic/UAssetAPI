@@ -65,6 +65,15 @@ the typed class list. Its unchanged JSON reconstruction was loaded, compiled,
 invoked, saved and invoked again in a fresh process. Regression tests compare all
 export payloads and check destination preservation for invalid reverse links.
 
+Dependency usage bits (`ImportUsedInGame`, `SoftPackageUsedInGame`) are read only by
+the Asset Registry and are regenerated from live references by every native save.
+The writer preserves the bits it read, gives appended imports and newly appended soft
+packages a conservative used-in-game bit, and refuses missing or mismatched bit
+arrays. Those appended bits are non-authoritative placeholders, not a dependency
+scope decision: a rehydrated package is loaded, compiled and saved natively before
+use, and that save replaces every derived table. Packages written with stale and
+with corrected bits converge to identical bytes after native save.
+
 Template adaptation still requires valid graph membership and explicit dependency
 identities. General import/export remapping, automatic dependency/soft-path
 discovery, complete node-family fixtures, source animation/mesh decoding and
