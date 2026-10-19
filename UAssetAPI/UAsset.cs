@@ -2627,6 +2627,33 @@ namespace UAssetAPI
                     ex.Name.Value = name.Value;
                     ex.Name.Number = name.Number;
                 }
+                catch (FSoftObjectPath.UnmappedPathException ex) when (ex.Asset == this)
+                {
+                    // Preserve old slots: opaque exports may still reference them.
+                    // Only a nonempty table uses indices, so this never changes an
+                    // inline package into an indexed package.
+                    string package = ex.Path.AssetPath.PackageName?.ToString();
+                    string name = ex.Path.AssetPath.AssetName?.ToString();
+                    if (!string.IsNullOrEmpty(package) && package != "None" && !string.IsNullOrEmpty(name) && name != "None")
+                    {
+                        int count = SoftPackageReferenceList?.Count ?? 0;
+                        if (SoftPackageBits != null && SoftPackageBits.Count != count)
+                            throw new FormatException("Soft package dependency bits do not match the package reference list");
+
+                        SoftPackageReferenceList ??= new List<FString>();
+                        int index = SoftPackageReferenceList.FindIndex(p => p?.Value == package);
+                        if (index < 0)
+                        {
+                            index = SoftPackageReferenceList.Count;
+                            SoftPackageReferenceList.Add(new FString(package));
+                            if (SoftPackageBits != null) SoftPackageBits.Length = SoftPackageReferenceList.Count;
+                        }
+                        // Collection scopes are native class-specific. Conservatively
+                        // retain this new dependency for game use rather than lose it.
+                        if (SoftPackageBits != null) SoftPackageBits[index] = true;
+                    }
+                    SoftObjectPathList.Add(ex.Path);
+                }
             }
         }
 

@@ -75,6 +75,21 @@ public struct FTopLevelAssetPath
 /// </summary>
 public struct FSoftObjectPath : IEquatable<FSoftObjectPath>, IStruct<FSoftObjectPath>
 {
+    // The header table has already been written when an export discovers a new
+    // path. UAsset retries the existing writer after extending that table.
+    internal sealed class UnmappedPathException : FormatException
+    {
+        internal readonly UAsset Asset;
+        internal readonly FSoftObjectPath Path;
+
+        internal UnmappedPathException(UAsset asset, FSoftObjectPath path)
+            : base($"Failed to find {path} in SoftObjectPathList")
+        {
+            Asset = asset;
+            Path = path;
+        }
+    }
+
     /// <summary>
     /// Asset path, patch to a top level object in a package. This is /package/path.assetname/
     /// </summary>
@@ -102,6 +117,8 @@ public struct FSoftObjectPath : IEquatable<FSoftObjectPath>, IStruct<FSoftObject
         {
             // serialize as idx
             int idx = reader.ReadInt32();
+            if ((uint)idx >= (uint)reader.Asset.SoftObjectPathList.Count)
+                throw new FormatException($"Soft object path index {idx} is outside the package table ({reader.Asset.SoftObjectPathList.Count} entries)");
 
             FSoftObjectPath target = reader.Asset.SoftObjectPathList[idx];
             this.AssetPath = target.AssetPath;
@@ -144,7 +161,7 @@ public struct FSoftObjectPath : IEquatable<FSoftObjectPath>, IStruct<FSoftObject
                     break;
                 }
             }
-            if (idx < 0) throw new FormatException("Failed to find AssetPath in SoftObjectPathList");
+            if (idx < 0) throw new UnmappedPathException(writer.Asset, this);
 
             writer.Write(idx);
             return sizeof(int);
