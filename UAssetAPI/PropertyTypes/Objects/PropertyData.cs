@@ -362,7 +362,7 @@ namespace UAssetAPI.PropertyTypes.Objects
         public object Clone()
         {
             var res = (PropertyData)MemberwiseClone();
-            res.Name = (FName)this.Name.Clone();
+            res.Name = (FName)this.Name?.Clone();
             if (res.RawValue is ICloneable cloneableValue) res.RawValue = cloneableValue.Clone();
 
             HandleCloned(res);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UAssetAPI.PropertyTypes.Objects;
 using UAssetAPI.UnrealTypes;
 
 namespace UAssetAPI.ExportTypes;
@@ -115,15 +116,67 @@ public class EdGraphNodeExport : NormalExport
     public static void ValidatePins(UAsset asset)
     {
         var pins = new Dictionary<(int Owner, Guid Id), EdGraphPin>();
+        var owners = new HashSet<int>();
+        var graphs = new HashSet<int>();
         for (int i = 0; i < asset.Exports.Count; i++)
         {
             if (asset.Exports[i] is not EdGraphNodeExport node) continue;
-            if (node.Pins == null) throw new FormatException($"Missing pins on node {node.ObjectName}");
-            foreach (var pin in node.Pins)
+            owners.Add(i + 1);
+            if (node.OuterIndex?.IsExport() == true) graphs.Add(node.OuterIndex.Index);
+        }
+        if (owners.Count == 0) return; // Preserve the existing entirely opaque route.
+        EdGraphPinSerialization.RequireProfile(asset);
+
+        // Graph membership also finds opaque nodes whose reverse link is now the
+        // only reference to a typed pin. Following typed links alone misses those.
+        foreach (int graphIndex in graphs)
+        {
+            if (graphIndex > asset.Exports.Count) throw new FormatException($"Invalid graph export {graphIndex}");
+            var graph = asset.Exports[graphIndex - 1];
+            NormalExport properties = graph as NormalExport;
+            if (graph is RawExport rawGraph)
+            {
+                using var reader = new AssetBinaryReader(new MemoryStream(rawGraph.Data, false), asset);
+                properties = graph.ConvertToChildExport<NormalExport>();
+                properties.Read(reader);
+            }
+            if (properties?["Nodes"] is not ArrayPropertyData nodes)
+                throw new FormatException($"Cannot validate node membership for graph {graph.ObjectName}");
+            foreach (var value in nodes.Value)
+            {
+                if (value is not ObjectPropertyData member || member.Value?.IsExport() != true || member.Value.Index > asset.Exports.Count)
+                    throw new FormatException($"Invalid node membership in graph {graph.ObjectName}");
+                owners.Add(member.Value.Index);
+            }
+        }
+        foreach (int owner in owners)
+        {
+            var export = asset.Exports[owner - 1];
+            EdGraphPin[] nodePins;
+            if (export is EdGraphNodeExport node) nodePins = node.Pins;
+            else
+            {
+                // Read only the common native pin prefix for validation. Keep the
+                // original export and its unqualified subclass tail byte-for-byte.
+                byte[] payload = export is RawExport raw ? raw.Data : export.Extras;
+                using var reader = new AssetBinaryReader(new MemoryStream(payload ?? Array.Empty<byte>(), false), asset);
+                try
+                {
+                    if (export is RawExport) export.ConvertToChildExport<NormalExport>().Read(reader);
+                    nodePins = new EdGraphPin[EdGraphPinSerialization.ReadCount(reader, 4)];
+                    for (int i = 0; i < nodePins.Length; i++) nodePins[i] = EdGraphPin.Read(reader);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    throw new FormatException($"Opaque node {export.ObjectName} (export {owner}) at byte {reader.BaseStream.Position}: {ex.Message}", ex);
+                }
+            }
+            if (nodePins == null) throw new FormatException($"Missing pins on node {export.ObjectName}");
+            foreach (var pin in nodePins)
             {
                 if (pin == null) continue;
-                if (pin.OwningNode?.Index != i + 1 || pin.PinId == Guid.Empty || !pins.TryAdd((i + 1, pin.PinId), pin))
-                    throw new FormatException($"Invalid owner or duplicate pin identity on node {node.ObjectName}");
+                if (pin.OwningNode?.Index != owner || pin.PinId == Guid.Empty || !pins.TryAdd((owner, pin.PinId), pin))
+                    throw new FormatException($"Invalid owner or duplicate pin identity on node {export.ObjectName}");
             }
         }
         EdGraphPin Resolve(EdGraphPinReference reference)

@@ -23,6 +23,18 @@ names. Unknown subclass tails retain the existing opaque export fallback.
 Typed exports cannot also write opaque pin bytes through `Extras`. Legacy JSON
 documents with ordinary exports and `Extras` remain readable.
 
+Mixed typed/opaque graphs validate the common native pin prefix of opaque nodes
+listed in the owning graph's `Nodes` array. The validator keeps the original
+export and tail unchanged; it does not promote these nodes to editable support.
+This also checks reverse links after a typed link has been removed. Unreadable
+prefixes and dangling/asymmetric links refuse before destination replacement.
+The entirely opaque legacy route is unchanged. This is not general remapping of
+references hidden in unknown subclass tails.
+
+Cloned pin-type properties own their nested names, package references and map
+terminal types. Cloned FText histories own recursive source text and format
+arguments; names retain their owning asset/name-map association.
+
 FString JSON keeps existing string/null shorthand. If shorthand would change
 the native encoding, it uses `{"Value":"text","Encoding":"utf-16"}` (or
 `utf-8`). A null native string encodes a zero count; an empty string retains its
@@ -45,6 +57,13 @@ Validation includes the generated `TestEditorUE5_8/BP_PinMatrix.uasset` fixture,
 the existing JSON/FText tests and negative controls. External UE5.8 native probes
 also cover 95 AnimBlueprint nodes/225 pins and a 12-node/37-pin Branch execution
 seed, without redistributing the mannequin assets.
+
+`TestEditorUE5_8/BP_MixedOpaque.uasset` was generated in UE5.8.3 using the native
+Blueprint toolset: an Actor Blueprint with a `Mixed` function whose entry connects
+to the engine ForLoop macro. `K2Node_MacroInstance` intentionally remains outside
+the typed class list. Its unchanged JSON reconstruction was loaded, compiled,
+invoked, saved and invoked again in a fresh process. Regression tests compare all
+export payloads and check destination preservation for invalid reverse links.
 
 Template adaptation still requires valid graph membership and explicit dependency
 identities. General import/export remapping, automatic dependency/soft-path

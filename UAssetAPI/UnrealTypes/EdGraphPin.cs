@@ -9,7 +9,7 @@ public enum EEdGraphPinDirection : byte { Input, Output }
 public enum EPinContainerType : byte { None, Array, Set, Map }
 
 /// <summary>The persistent, native FEdGraphTerminalType used for a map value.</summary>
-public class FEdGraphTerminalType
+public class FEdGraphTerminalType : ICloneable
 {
     public FName TerminalCategory;
     public FName TerminalSubCategory;
@@ -17,6 +17,15 @@ public class FEdGraphTerminalType
     public bool IsConst;
     public bool IsWeakPointer;
     public bool IsUObjectWrapper;
+
+    public object Clone()
+    {
+        var copy = (FEdGraphTerminalType)MemberwiseClone();
+        copy.TerminalCategory = (FName)TerminalCategory?.Clone();
+        copy.TerminalSubCategory = (FName)TerminalSubCategory?.Clone();
+        copy.TerminalSubCategoryObject = TerminalSubCategoryObject == null ? null : new FPackageIndex(TerminalSubCategoryObject.Index);
+        return copy;
+    }
 
     internal static FEdGraphTerminalType Read(AssetBinaryReader reader) => new()
     {
@@ -40,7 +49,7 @@ public class FEdGraphTerminalType
 }
 
 /// <summary>Native FEdGraphPinType, shared by node pins and reflected struct properties.</summary>
-public class FEdGraphPinType
+public class FEdGraphPinType : ICloneable
 {
     public FName PinCategory;
     public FName PinSubCategory;
@@ -55,6 +64,18 @@ public class FEdGraphPinType
     public bool IsConst;
     public bool IsUObjectWrapper;
     public bool SerializeAsSinglePrecisionFloat;
+
+    public object Clone()
+    {
+        var copy = (FEdGraphPinType)MemberwiseClone();
+        copy.PinCategory = (FName)PinCategory?.Clone();
+        copy.PinSubCategory = (FName)PinSubCategory?.Clone();
+        copy.PinSubCategoryObject = PinSubCategoryObject == null ? null : new FPackageIndex(PinSubCategoryObject.Index);
+        copy.PinValueType = (FEdGraphTerminalType)PinValueType?.Clone();
+        copy.MemberParent = MemberParent == null ? null : new FPackageIndex(MemberParent.Index);
+        copy.MemberName = (FName)MemberName?.Clone();
+        return copy;
+    }
 
     public static FEdGraphPinType Read(AssetBinaryReader reader)
     {

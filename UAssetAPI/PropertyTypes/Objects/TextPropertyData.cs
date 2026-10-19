@@ -26,8 +26,9 @@ public enum ETransformType : byte
     ToUpper,
 }
 
-public class FNumberFormattingOptions
+public class FNumberFormattingOptions : ICloneable
 {
+    public object Clone() => MemberwiseClone();
     public bool AlwaysSign;
     public bool UseGrouping;
     public ERoundingMode RoundingMode;
@@ -73,8 +74,14 @@ public class FNumberFormattingOptions
 }
 
 
-public class FFormatArgumentValue
+public class FFormatArgumentValue : ICloneable
 {
+    public object Clone()
+    {
+        var copy = (FFormatArgumentValue)MemberwiseClone();
+        if (Value is ICloneable cloneable) copy.Value = cloneable.Clone();
+        return copy;
+    }
     public EFormatArgumentType Type;
     public object Value;
 
@@ -157,8 +164,15 @@ public class FFormatArgumentValue
     }
 }
 
-public class FFormatArgumentData
+public class FFormatArgumentData : ICloneable
 {
+    public object Clone()
+    {
+        var copy = (FFormatArgumentData)MemberwiseClone();
+        copy.ArgumentName = (FString)ArgumentName?.Clone();
+        copy.ArgumentValue = (FFormatArgumentValue)ArgumentValue?.Clone();
+        return copy;
+    }
     public FString ArgumentName;
     public FFormatArgumentValue ArgumentValue;
 
@@ -517,5 +531,12 @@ public class TextPropertyData : PropertyData<FString>
         cloningProperty.Namespace = (FString)Namespace?.Clone();
         cloningProperty.CultureInvariantString = (FString)CultureInvariantString?.Clone();
         cloningProperty.DevNotes = (FString)DevNotes?.Clone();
+        cloningProperty.SourceFmt = (TextPropertyData)SourceFmt?.Clone();
+        cloningProperty.Arguments = Arguments == null ? null : Array.ConvertAll(Arguments, x => (FFormatArgumentValue)x?.Clone());
+        cloningProperty.ArgumentsData = ArgumentsData == null ? null : Array.ConvertAll(ArgumentsData, x => (FFormatArgumentData)x?.Clone());
+        cloningProperty.NamedArguments = NamedArguments == null ? null : Array.ConvertAll(NamedArguments, x => (FFormatArgumentData)x?.Clone());
+        cloningProperty.SourceValue = (FFormatArgumentValue)SourceValue?.Clone();
+        cloningProperty.FormatOptions = (FNumberFormattingOptions)FormatOptions?.Clone();
+        cloningProperty.TargetCulture = (FString)TargetCulture?.Clone();
     }
 }
