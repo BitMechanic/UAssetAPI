@@ -79,7 +79,11 @@ soft packages with their paths, the package's own name) and marks load-critical 
 `PackageBinding.Apply` rebinds exact identities before native load without rewriting a name-map
 entry: hard references follow their import, soft references follow their table entry (parsed
 top-level soft values and metadata keys are moved with it), and a shared package import is never
-renamed on behalf of one object. Destinations carry the class read with Epic
+renamed on behalf of one object. Chained or swapped bindings refuse; a package binding needs every
+top-level object it moves among the destinations; soft references inside containers, optionals or
+set/map removal entries refuse. Metadata string values and derived tables (searchable names, registry
+tags) are not rebound: the former are not references and native save regenerates the latter.
+Destinations carry the class read with Epic
 `AssetTools.get_asset_class`. In UE5.8.3 a struct whose identity changes loses its serialized values
 silently, so struct identity changes refuse; a parent with another native base passes the class
 check and is rewritten by the native compile, so parent chains are compared before binding.

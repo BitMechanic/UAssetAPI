@@ -239,6 +239,75 @@ public class PackageBindingTests
         StringAssert.Contains(error.Message, "container property");
     }
 
+    // Set and map removal entries and optionals are serialized but hold no rebound value (FORK-S1 review R3).
+    [DataTestMethod]
+    [DataRow("set")]
+    [DataRow("map")]
+    [DataRow("optional")]
+    public void SoftValueInRemovalEntryOrOptionalRefuses(string holder)
+    {
+        var asset = Rehydrate("BP_SoftReference.uasset");
+        var cdo = Cdo(asset, "Default__Source_C");
+        var soft = (SoftObjectPropertyData)cdo.Data.Single(p => p.Name.ToString() == "SoftAsset");
+        var name = FName.FromString(asset, "Nested");
+        var inner = new SoftObjectPropertyData(name) { Value = soft.Value };
+        cdo.Data.Add(holder switch
+        {
+            "set" => new SetPropertyData(name) { ArrayType = FName.FromString(asset, "SoftObjectProperty"), Value = Array.Empty<PropertyData>(), ElementsToRemove = new PropertyData[] { inner } },
+            "map" => new MapPropertyData(name) { Value = new TMap<PropertyData, PropertyData>(), KeysToRemove = new PropertyData[] { inner } },
+            _ => new OptionalPropertyData(name) { Value = inner },
+        });
+        string[] names = Names(asset), imports = asset.Imports.Select(i => i.ObjectName.ToString()).ToArray();
+        var error = Assert.ThrowsException<FormatException>(() => PackageBinding.Apply(asset, Lifecycle, Destinations));
+        StringAssert.Contains(error.Message, "container property");
+        CollectionAssert.AreEqual(names, Names(asset));
+        CollectionAssert.AreEqual(imports, asset.Imports.Select(i => i.ObjectName.ToString()).ToArray());
+        Assert.AreEqual("/Game/UAssetAPIProbe/UserCurve", soft.Value.AssetPath.PackageName.ToString());
+    }
+
+    // A chained or swapped map would depend on the order of application (FORK-S1 review R1).
+    [DataTestMethod]
+    [DataRow("/Game/S1Shared/B/Curve.Curve", "/Game/S1Receiver/ReboundCurve.ReboundCurve")]
+    [DataRow("/Game/S1Shared/B/Curve.Curve", "/Game/S1Shared/A/Curve.Curve")]
+    public void ChainedOrSwappedBindingsRefuse(string secondSource, string secondDestination)
+    {
+        var asset = Rehydrate("Binding/BP_SharedNames.uasset");
+        string json = asset.SerializeJson();
+        var bindings = new Dictionary<string, string> { ["/Game/S1Shared/A/Curve.Curve"] = "/Game/S1Shared/B/Curve.Curve", [secondSource] = secondDestination };
+        var destinations = new Dictionary<string, string>(Destinations) { ["/Game/S1Shared/A/Curve.Curve"] = "CurveFloat", ["/Game/S1Shared/B/Curve.Curve"] = "CurveFloat" };
+        var error = Assert.ThrowsException<FormatException>(() => PackageBinding.Apply(asset, bindings, destinations));
+        StringAssert.Contains(error.Message, "source package");
+        Assert.AreEqual(json, asset.SerializeJson());
+    }
+
+    // A package binding moves every top-level object in the package, so each must be a destination of the
+    // same class; default objects follow their class (FORK-S1 review R2).
+    [DataTestMethod]
+    [DataRow("", "not among the destinations")]
+    [DataRow("UserDefinedStruct", "not a")]
+    public void PackageBindingChecksEveryMovedObject(string destinationClass, string refusal)
+    {
+        var asset = Rehydrate("Binding/BP_SharedNames.uasset");
+        string json = asset.SerializeJson();
+        var destinations = new Dictionary<string, string>();
+        if (destinationClass.Length > 0) destinations["/Game/Other/Curve.Curve"] = destinationClass;
+        var error = Assert.ThrowsException<FormatException>(() => PackageBinding.Apply(asset, new Dictionary<string, string> { ["/Game/S1Shared/A/Curve"] = "/Game/Other/Curve" }, destinations));
+        StringAssert.Contains(error.Message, refusal);
+        Assert.AreEqual(json, asset.SerializeJson());
+    }
+
+    [TestMethod]
+    public void PackageBindingMovesACheckedDestination()
+    {
+        var asset = Rehydrate("Binding/BP_SharedNames.uasset");
+        int a = ImportIndex(asset, "/Game/S1Shared/A/Curve", "Curve");
+        PackageBinding.Apply(asset, new Dictionary<string, string> { ["/Game/S1Shared/A/Curve"] = "/Game/Other/Curve" }, new Dictionary<string, string> { ["/Game/Other/Curve.Curve"] = "CurveFloat" });
+        var after = Reread(asset);
+        Assert.AreEqual("/Game/Other/Curve", PackageOf(after, after.Imports[a]));
+        var soft = ((SoftObjectPropertyData)Cdo(after, "Default__BP_SharedNames_C").Data.Single(p => p.Name.ToString() == "SoftA")).Value;
+        Assert.AreEqual("/Game/Other/Curve.Curve", soft.AssetPath.PackageName + "." + soft.AssetPath.AssetName);
+    }
+
     [TestMethod]
     public void RepeatedApplyIsIdempotent()
     {
