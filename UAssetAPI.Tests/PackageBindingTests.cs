@@ -11,7 +11,7 @@ namespace UAssetAPI.Tests;
 
 /// <summary>
 /// Header-level dependency manifest and identity-based rebinding (FORK-S1 S1-4). Each case was
-/// first run natively in UE5.8.3; these regressions pin the managed side of those controls.
+/// first run natively in UE5.8.3 unless explicitly marked as synthetic header controls below.
 /// </summary>
 [TestClass]
 public class PackageBindingTests
@@ -222,6 +222,47 @@ public class PackageBindingTests
             Assert.AreEqual(1, Directory.GetFiles(Path.GetDirectoryName(path), "*" + Path.GetFileNameWithoutExtension(path) + "*").Length);
         }
         finally { File.Delete(path); }
+    }
+
+    // Synthetic header controls: the native fixture supplies the import/outer structure, not evidence
+    // that an asset of each substituted class can load. The retained ABP_Unarmed JSON is replayed separately.
+    [DataTestMethod]
+    [DataRow("ControlRigBlueprintGeneratedClass")]
+    [DataRow("AnimBlueprintGeneratedClass")]
+    [DataRow("WidgetBlueprintGeneratedClass")]
+    [DataRow("PluginGeneratedClass")]
+    public void GeneratedClassSubclassMustResolveBeforeLoad(string className)
+    {
+        var asset = Rehydrate("BP_SoftReference.uasset");
+        int parent = ImportIndex(asset, "/Game/UAssetAPIProbe/UserParent", "UserParent_C");
+        asset.Imports[parent].ClassName = FName.FromString(asset, className);
+        string before = asset.SerializeJson();
+        var destinations = Destinations.Where(d => d.Value != "UserParent_C").ToDictionary(d => d.Key, d => d.Value);
+        var error = Assert.ThrowsException<FormatException>(() => PackageBinding.Apply(asset, Curves, destinations));
+        StringAssert.Contains(error.Message, "Load-critical import /Game/UAssetAPIProbe/UserParent.UserParent_C");
+        Assert.AreEqual(before, asset.SerializeJson(), "refusal precedes mutation");
+        CollectionAssert.AreEquivalent(new[] { "UserParent_C", "/Game/UAssetAPIProbe/UserParent" },
+            PackageBinding.Describe(asset).Imports.Where(i => i.LoadCritical).Select(i => i.ObjectName).ToArray());
+
+        // Presence is sufficient without a relocation; qualified binding remains possible as well.
+        destinations["/Game/UAssetAPIProbe/UserParent.UserParent_C"] = className;
+        PackageBinding.Apply(asset, Curves, destinations);
+        destinations["/Game/S1Receiver/UserParent.UserParent_C"] = className;
+        PackageBinding.Apply(asset, new Dictionary<string, string> { ["/Game/UAssetAPIProbe/UserParent"] = "/Game/S1Receiver/UserParent" }, destinations);
+        var after = Reread(asset);
+        Assert.AreEqual("/Game/S1Receiver/UserParent", PackageOf(after, after.Imports[parent]));
+        Assert.AreEqual(className, after.Imports[parent].ClassName.ToString());
+    }
+
+    [TestMethod]
+    public void OrdinaryMissingAssetIsNotPromotedToLoadCriticalByTheClassGuard()
+    {
+        var asset = Rehydrate("BP_SoftReference.uasset");
+        int parent = ImportIndex(asset, "/Game/UAssetAPIProbe/UserParent", "UserParent_C");
+        asset.Imports[parent].ClassName = FName.FromString(asset, "AnimSequence");
+        Assert.IsFalse(PackageBinding.Describe(asset).Imports.Any(i => i.LoadCritical));
+        PackageBinding.Apply(asset, Curves, Destinations.Where(d => d.Value != "UserParent_C").ToDictionary(d => d.Key, d => d.Value));
+        Assert.AreEqual("/Game/UAssetAPIProbe/UserParent", PackageOf(asset, asset.Imports[parent]));
     }
 
     [TestMethod]

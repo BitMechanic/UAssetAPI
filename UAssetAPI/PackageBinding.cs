@@ -20,7 +20,7 @@ namespace UAssetAPI
     /// </summary>
     public static class PackageBinding
     {
-        /// <summary>Import classes that must be bound or present before native load, with their package outers.</summary>
+        /// <summary>Exact import classes requiring resolution; Describe also includes every *GeneratedClass and its package outer.</summary>
         public static readonly IReadOnlyCollection<string> LoadCriticalClasses = new HashSet<string>
         {
             "Class", "BlueprintGeneratedClass", "ScriptStruct", "UserDefinedStruct", "UserDefinedEnum", "Enum", "Skeleton", "Function",
@@ -72,7 +72,8 @@ namespace UAssetAPI
                     ClassPackage = asset.Imports[i].ClassPackage?.ToString(),
                     ClassName = asset.Imports[i].ClassName?.ToString(),
                     OuterChain = chain.Select(c => asset.Imports[c].ObjectName.ToString()).ToArray(),
-                    LoadCritical = LoadCriticalClasses.Contains(asset.Imports[i].ClassName?.ToString()),
+                    LoadCritical = LoadCriticalClasses.Contains(asset.Imports[i].ClassName?.ToString())
+                        || asset.Imports[i].ClassName?.ToString().EndsWith("GeneratedClass", StringComparison.Ordinal) == true,
                 });
             }
             var criticalPackages = entries.Where(e => e.LoadCritical).Select(e => e.Package).ToHashSet();
