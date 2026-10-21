@@ -2037,6 +2037,8 @@ namespace UAssetAPI
                         var siteDescription = reader.ReadFString();
                         var isEditorOnly = reader.ReadBooleanInt();
                         var isOptional = reader.ReadBooleanInt();
+                        var devNotes = (int)GetCustomVersion<FFortniteMainBranchObjectVersion>() >= FTextSourceSiteContext.AddDevNotesVersion && !IsFilterEditorOnly
+                            ? reader.ReadFString() : null;
                         var infoMetaData = reader.ReadLocMetadataObject();
                         var keyMetaData = reader.ReadLocMetadataObject();
 
@@ -2046,6 +2048,7 @@ namespace UAssetAPI
                             SiteDescription = siteDescription,
                             IsEditorOnly = isEditorOnly,
                             IsOptional = isOptional,
+                            DevNotes = devNotes,
                             InfoMetaData = infoMetaData,
                             KeyMetaData = keyMetaData
                         };
@@ -2766,6 +2769,8 @@ namespace UAssetAPI
                             writer.Write(context.SiteDescription);
                             writer.WriteBooleanInt(context.IsEditorOnly);
                             writer.WriteBooleanInt(context.IsOptional);
+                            if ((int)GetCustomVersion<FFortniteMainBranchObjectVersion>() >= FTextSourceSiteContext.AddDevNotesVersion && !IsFilterEditorOnly)
+                                writer.Write(context.DevNotes);
                             writer.Write(context.InfoMetaData);
                             writer.Write(context.KeyMetaData);
                         }

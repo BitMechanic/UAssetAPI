@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Linq;
 using UAssetAPI.ExportTypes;
+using UAssetAPI.CustomVersions;
 using UAssetAPI.UnrealTypes;
 
 namespace UAssetAPI.Tests;
@@ -36,6 +37,9 @@ public class CarrierFidelityTests
     [DataRow("Usage/Old.uasset")]
     [DataRow("Usage/Other.uasset")]
     [DataRow("Usage/Target.uasset")]
+    [DataRow("BlueprintFamilies/BP_ComponentFamily.uasset")]
+    [DataRow("BlueprintFamilies/BP_ObjectFamily.uasset")]
+    [DataRow("BlueprintFamilies/BP_DataOnlyFamily.uasset")]
     public void NativePackageSurvivesDirectAndJsonWrites(string fixture)
     {
         string path = Fixture(fixture);
@@ -64,6 +68,91 @@ public class CarrierFidelityTests
         if (hasSection) Assert.AreEqual(0, asset.GatherableTextData.Count);
         var carried = JObject.Parse(asset.SerializeJson())["GatherableTextData"];
         Assert.AreEqual(hasSection ? JTokenType.Array : JTokenType.Null, carried.Type);
+    }
+
+    // Native data-only Blueprint: populated gather cache, with the UE5.8 DevNotes
+    // FString between IsOptional and InfoMetaData. Previously both writes lost 4 bytes.
+    [TestMethod]
+    public void NativeGatherableTextLegacyJsonWithoutNotesPreservesEmptyString()
+    {
+        string path = Fixture("BlueprintFamilies/BP_DataOnlyFamily.uasset");
+        var asset = Read(path);
+        var context = asset.GatherableTextData.Single().SourceSiteContexts.Single();
+        Assert.AreEqual("Default", context.KeyName.Value);
+        Assert.IsNull(context.DevNotes); // Native zero-length FString representation.
+        var json = JObject.Parse(asset.SerializeJson());
+        Assert.IsTrue(((JObject)json["GatherableTextData"][0]["SourceSiteContexts"][0]).Remove("DevNotes"));
+        AssertSameBytes(File.ReadAllBytes(path), UAsset.DeserializeJson(json.ToString()).WriteData().ToArray(), "legacy JSON");
+    }
+
+    [DataTestMethod]
+    [DataRow(259, false)]
+    [DataRow(260, false)]
+    [DataRow(268, false)]
+    [DataRow(268, true)]
+    public void GatherableTextDeveloperNotesFollowNativeVersionedLayout(int version, bool filtered)
+    {
+        var asset = Read(Fixture("BlueprintFamilies/BP_DataOnlyFamily.uasset"));
+        asset.CustomVersionContainer.Single(v => v.Key == CustomVersion.GetCustomVersionGuidFromFriendlyName(nameof(FFortniteMainBranchObjectVersion))).Version = version;
+        if (filtered)
+        {
+            asset.PackageFlags |= EPackageFlags.PKG_FilterEditorOnly;
+            // Only exercise the gather-cache reader: editor graph exports are
+            // deliberately unsupported in a filtered archive.
+            asset.Exports.Clear();
+            typeof(UAsset).GetField("ExportCount", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(asset, 0);
+        }
+        var text = asset.GatherableTextData.Single();
+        var context = text.SourceSiteContexts.Single();
+        context.DevNotes = new FString("Translator context: caf\u00e9 \u03a9", System.Text.Encoding.Unicode);
+        text.SourceSiteContexts[0] = context;
+        var following = context;
+        following.KeyName = new FString("Following context");
+        following.DevNotes = null;
+        text.SourceSiteContexts.Add(following);
+
+        // Independent transcription of GatherableTextData.cpp, not the production writer.
+        using var expected = new MemoryStream();
+        using (var writer = new AssetBinaryWriter(expected, System.Text.Encoding.UTF8, true, asset))
+        {
+            writer.Write(text.NamespaceName);
+            writer.Write(text.SourceData.SourceString);
+            writer.Write(0); // SourceStringMetaData map.
+            writer.Write(2);
+            foreach (var c in text.SourceSiteContexts)
+            {
+                writer.Write(c.KeyName);
+                writer.Write(c.SiteDescription);
+                writer.WriteBooleanInt(c.IsEditorOnly);
+                writer.WriteBooleanInt(c.IsOptional);
+                if (version >= 260 && !filtered) writer.Write(c.DevNotes);
+                writer.Write(0); // InfoMetaData map.
+                writer.Write(0); // KeyMetaData map.
+            }
+        }
+        byte[] bytes = asset.WriteData().ToArray();
+        if (filtered)
+        {
+            // WriteData omits the entire gather cache for filtered packages, so
+            // simply flipping the flag cannot exercise the reader's field gate.
+            // Append our independently encoded section and point the summary at
+            // it. This is a synthetic reader control, not a native cooked fixture.
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            typeof(UAsset).GetField("GatherableTextDataOffset", flags).SetValue(asset, bytes.Length);
+            typeof(UAsset).GetField("GatherableTextDataCount", flags).SetValue(asset, 1);
+            bytes = bytes.Concat(expected.ToArray()).ToArray();
+            ((byte[])typeof(UAsset).GetMethod("MakeHeader", flags).Invoke(asset, null)).CopyTo(bytes, 0);
+        }
+        var reread = Read(bytes, asset);
+        Assert.AreEqual(filtered, reread.IsFilterEditorOnly);
+        int offset = (int)typeof(UAsset).GetField("GatherableTextDataOffset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(reread);
+        AssertSameBytes(expected.ToArray(), bytes.Skip(offset).Take((int)expected.Length).ToArray(), "native gather layout");
+        var contexts = reread.GatherableTextData.Single().SourceSiteContexts;
+        Assert.AreEqual(2, contexts.Count);
+        Assert.AreEqual(version >= 260 && !filtered ? context.DevNotes.Value : null, contexts[0].DevNotes?.Value);
+        Assert.AreEqual("Following context", contexts[1].KeyName.Value);
+        Assert.IsNull(contexts[1].DevNotes);
+        if (!filtered) AssertSameBytes(bytes, UAsset.DeserializeJson(reread.SerializeJson()).WriteData().ToArray(), "versioned JSON");
     }
 
     // The editor checks both script offsets against the export start on load
