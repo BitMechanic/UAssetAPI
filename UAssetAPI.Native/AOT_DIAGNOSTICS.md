@@ -27,11 +27,15 @@ analysis, assembly-wide suppression, or replacement serializer.
 
 `UAssetAPI.Native.csproj` roots the entire UAssetAPI assembly, including model
 members, built-in properties, fields and custom-version enum attributes.
-`Exports.Process` preserves the enum converter constructor and the concrete
+`Exports.PreserveEnumConverter` preserves the enum converter constructor;
+`Exports.Process` preserves the concrete
 value-type collections established by prior Blueprint/Animation AOT evidence.
 The `RCTNativeBridge=true` project reference enables `RCT_NATIVE_BRIDGE` only
 for this build. Each `UnconditionalSuppressMessage` is on its exact method and
 has a justification; it is not attached to the assembly or all methods of a type.
+The C ABI entry point itself is unsuppressed, so newly introduced dynamic-code or
+trimming requirements there fail the native build. Only the enum-dependency helper
+has its two dependency-specific annotations.
 
 The JSON ingress binder admits asset data and standard data containers. The C ABI
 does not accept caller-defined managed types, converters, dynamic proxies, mapping
@@ -65,6 +69,15 @@ The 123-message pre-repair log is retained, along with the warning-free build.
 Zero emitted diagnostics includes justified native-only annotations and removal
 of unsupported internal APIs; it does not mean every warning was fixed by removing
 reflection, nor does it complete AN-2, Supabase or default/legacy cutover.
+
+The project reference shares the library's `bin`/`obj` directories with ordinary
+managed builds. A native publish leaves a bridge-profile library assembly there.
+Build the managed project/tests before consuming their output; do not treat the
+last DLL in that shared directory as profile-independent. The retained managed-test
+assembly was built without `RCTNativeBridge` and has no `AotContract`; that observation
+applies to that build, not every later file at the same path. The profile changes
+only diagnostic attributes and internal constants. A normal rebuild restores the
+ordinary managed diagnostic contract.
 
 References: [Microsoft's warning guidance](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/fixing-warnings),
 [ILC/ILLink data formats](https://github.com/dotnet/runtime/blob/main/docs/tools/illink/data-formats.md),

@@ -26,6 +26,8 @@ public static unsafe class Exports
     // Json.NET constructs this built-in converter from UAssetAPI's attributes.
     // Preserve that constructor without rooting Json.NET's unrelated schema/DLR APIs.
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor, typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+    private static void PreserveEnumConverter() { }
+
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UAssetAPI.ExportTypes.SerializedInterfaceReference>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<FFrameNumber>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UAssetAPI.Kismet.Bytecode.Expressions.FKismetSwitchCase>))]
@@ -38,6 +40,7 @@ public static unsafe class Exports
         {
             lock (Gate)
             {
+                PreserveEnumConverter();
                 GC.KeepAlive(AotCollections);
                 string source = Path.GetFullPath(Utf8(input));
                 string destination = Path.GetFullPath(Utf8(output));

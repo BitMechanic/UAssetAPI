@@ -417,6 +417,19 @@ namespace UAssetAPI.Tests
             TestManyAssetsSubsection("SN2", EngineVersion.UNKNOWN, new Usmap(Path.Combine(TestFolder, "TestManyAssets", "SN2", "SN2.jmap.gz"))); // test of jmap version auto-fill
         }
 
+        [TestMethod]
+        public void TestJmapResolverlessOptions()
+        {
+            // JmapHelper is internal; keep the production API unchanged.
+            var helper = typeof(Usmap).Assembly.GetType("UAssetAPI.Unversioned.JmapHelper");
+            var read = helper.GetMethod("GetObjectBase", new[] { typeof(string), typeof(System.Text.Json.JsonSerializerOptions) });
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = read.Invoke(null, new object[] { "{\"ADDRESS\":\"custom-options\"}", options });
+            Assert.AreEqual("custom-options", result.GetType().GetProperty("Address").GetValue(result));
+            Assert.IsNull(options.TypeInfoResolver, "Caller options must not be modified");
+            Assert.IsFalse(options.IsReadOnly, "Caller options must remain mutable");
+        }
+
         /// <summary>
         /// In this test, we examine and modify a DataTable to ensure that it parses correctly and maintains binary equality.
         /// </summary>

@@ -584,12 +584,18 @@ namespace UAssetAPI.Unversioned
 
         public static JmapObjectBase GetObjectBase(string objectJSON, JsonSerializerOptions options = null)
         {
-            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, (options ?? Usmap.SerializerOptions ?? JmapDefaultOptions()).GetTypeInfo(typeof(JmapObjectBase)));
+            options ??= Usmap.SerializerOptions;
+            if (options.TypeInfoResolver == null)
+                options = new JsonSerializerOptions(options) { TypeInfoResolver = JmapSourceGenerationContext.Default };
+            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, options.GetTypeInfo(typeof(JmapObjectBase)));
         }
 
         public static JmapObjectBase GetObjectBase(ReadOnlySpan<byte> objectJSON, JsonSerializerOptions options = null)
         {
-            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, (options ?? Usmap.SerializerOptions ?? JmapDefaultOptions()).GetTypeInfo(typeof(JmapObjectBase)));
+            options ??= Usmap.SerializerOptions;
+            if (options.TypeInfoResolver == null)
+                options = new JsonSerializerOptions(options) { TypeInfoResolver = JmapSourceGenerationContext.Default };
+            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, options.GetTypeInfo(typeof(JmapObjectBase)));
         }
 
         public static void ReadSchema(JmapObjectBase objectBase, UsmapSchema templateSchema)
