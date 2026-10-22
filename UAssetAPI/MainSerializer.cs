@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -24,6 +25,7 @@ namespace UAssetAPI
     /// </summary>
     internal class RegistryEntry
     {
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
         internal Type PropertyType;
         internal bool HasCustomStructSerialization;
         internal Func<FName, PropertyData> Creator;
@@ -68,6 +70,7 @@ namespace UAssetAPI
 
         private static IEnumerable<string> GetNamesOfAssembliesReferencedBy(Assembly assembly)
         {
+            if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported) return Array.Empty<string>();
             return assembly.GetReferencedAssemblies().Select(assemblyName => assemblyName.FullName);
         }
 
@@ -92,12 +95,22 @@ namespace UAssetAPI
         /// <summary>
         /// Initializes the property type registry.
         /// </summary>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Model)]
+        [UnconditionalSuppressMessage("Trimming", "IL2062", Justification = AotContract.Model)]
+        [UnconditionalSuppressMessage("Trimming", "IL2064", Justification = AotContract.Model)]
+        [UnconditionalSuppressMessage("Trimming", "IL2065", Justification = AotContract.Model)]
+#endif
         private static void InitializePropertyTypeRegistry()
         {
             if (_propertyTypeRegistry != null) return;
             _propertyTypeRegistry = new Dictionary<string, RegistryEntry>();
 
-            Assembly[] allDependentAssemblies = GetDependentAssemblies(registryParentDataType.Assembly).ToArray();
+            // Native AOT cannot discover assemblies loaded after compilation. The bridge
+            // preserves the built-in property types; ordinary managed hosts retain extensions.
+            Assembly[] allDependentAssemblies = System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported
+                ? GetDependentAssemblies(registryParentDataType.Assembly).ToArray()
+                : Array.Empty<Assembly>();
             Assembly[] allAssemblies = new Assembly[allDependentAssemblies.Length + 1];
             allAssemblies[0] = registryParentDataType.Assembly;
             Array.Copy(allDependentAssemblies, 0, allAssemblies, 1, allDependentAssemblies.Length);
@@ -110,26 +123,32 @@ namespace UAssetAPI
                     Type currentPropertyDataType = allPropertyDataTypes[j];
                     if (currentPropertyDataType == null || currentPropertyDataType.ContainsGenericParameters) continue;
 
-                    var testInstance = Activator.CreateInstance(currentPropertyDataType);
+                    var testInstance = (PropertyData)Activator.CreateInstance(currentPropertyDataType);
 
-                    FString returnedPropType = currentPropertyDataType.GetProperty("PropertyType")?.GetValue(testInstance, null) as FString;
+                    FString returnedPropType = testInstance.PropertyType;
                     if (returnedPropType == null) continue;
-                    bool? returnedHasCustomStructSerialization = currentPropertyDataType.GetProperty("HasCustomStructSerialization")?.GetValue(testInstance, null) as bool?;
-                    if (returnedHasCustomStructSerialization == null) continue;
-                    bool? returnedShouldBeRegistered = currentPropertyDataType.GetProperty("ShouldBeRegistered")?.GetValue(testInstance, null) as bool?;
-                    if (returnedShouldBeRegistered == null) continue;
+                    bool returnedHasCustomStructSerialization = testInstance.HasCustomStructSerialization;
+                    bool returnedShouldBeRegistered = testInstance.ShouldBeRegistered;
 
-                    if ((bool)returnedShouldBeRegistered)
+                    if (returnedShouldBeRegistered)
                     {
                         RegistryEntry res = new RegistryEntry();
                         res.PropertyType = currentPropertyDataType;
-                        res.HasCustomStructSerialization = (bool)returnedHasCustomStructSerialization;
+                        res.HasCustomStructSerialization = returnedHasCustomStructSerialization;
 
-                        var nameParam = Expression.Parameter(typeof(FName));
-                        res.Creator = Expression.Lambda<Func<FName, PropertyData>>(
-                           Expression.New(currentPropertyDataType.GetConstructor(new[] { typeof(FName), }), new[] { nameParam, }),
-                           nameParam
-                        ).Compile();
+                        var constructor = currentPropertyDataType.GetConstructor(new[] { typeof(FName) });
+                        if (System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+                        {
+                            var nameParam = Expression.Parameter(typeof(FName));
+                            res.Creator = Expression.Lambda<Func<FName, PropertyData>>(
+                                Expression.New(constructor, nameParam), nameParam).Compile();
+                        }
+                        else
+                        {
+                            // The native bridge preserves built-in constructors. Invoke one
+                            // directly instead of retaining the expression interpreter/DLR.
+                            res.Creator = name => (PropertyData)constructor.Invoke(new object[] { name });
+                        }
 
                         // prevent duplicate entries
                         if (_propertyTypeRegistry.ContainsKey(returnedPropType.Value))
@@ -507,6 +526,9 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the FProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
+#endif
         public static FProperty ReadFProperty(AssetBinaryReader reader)
         {
             FName serializedType = reader.ReadFName();
@@ -535,6 +557,9 @@ namespace UAssetAPI
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the UProperty to be read.</param>
         /// <param name="serializedType">The type of UProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
+#endif
         public static UProperty ReadUProperty(AssetBinaryReader reader, FName serializedType)
         {
             return ReadUProperty(reader, Type.GetType("UAssetAPI.FieldTypes.U" + allNonLetters.Replace(serializedType.Value.Value, string.Empty)));
@@ -546,7 +571,7 @@ namespace UAssetAPI
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the UProperty to be read.</param>
         /// <param name="requestedType">The type of UProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
-        public static UProperty ReadUProperty(AssetBinaryReader reader, Type requestedType)
+        public static UProperty ReadUProperty(AssetBinaryReader reader, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type requestedType)
         {
             if (requestedType == null) requestedType = typeof(UGenericProperty);
             var res = (UProperty)Activator.CreateInstance(requestedType);
@@ -559,7 +584,7 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the UProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
-        public static T ReadUProperty<T>(AssetBinaryReader reader) where T : UProperty
+        public static T ReadUProperty<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>(AssetBinaryReader reader) where T : UProperty
         {
             var res = (UProperty)Activator.CreateInstance(typeof(T));
             res.Read(reader);

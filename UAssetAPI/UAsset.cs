@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using UAssetAPI.CustomVersions;
@@ -756,6 +757,9 @@ namespace UAssetAPI
             CustomVersionContainer = GetDefaultCustomVersionContainer(newVersion);
         }
 
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
+#endif
         public static EngineVersion GetEngineVersion(ObjectVersion objectVersion, ObjectVersionUE5 objectVersionUE5, List<CustomVersion> customVersionContainer)
         {
             // analyze all possible versions based off of the object version alone
@@ -826,11 +830,11 @@ namespace UAssetAPI
             return UAsset.GetEngineVersion(ObjectVersion, ObjectVersionUE5, CustomVersionContainer);
         }
 
-        private static EngineVersion GetIntroducedFromCustomVersionValue(Type customVersionType, int val)
+        private static EngineVersion GetIntroducedFromCustomVersionValue([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type customVersionType, int val)
         {
             var nm = Enum.GetName(customVersionType, val);
             if (nm == null) return EngineVersion.UNKNOWN;
-            var attributes = customVersionType.GetMember(nm)?[0]?.GetCustomAttributes(typeof(IntroducedAttribute), false);
+            var attributes = customVersionType.GetField(nm)?.GetCustomAttributes(typeof(IntroducedAttribute), false);
             if (attributes == null || attributes.Length <= 0) return EngineVersion.UNKNOWN;
             return ((IntroducedAttribute)attributes[0]).IntroducedVersion;
         }
@@ -897,7 +901,7 @@ namespace UAssetAPI
         }
 
         private static ConcurrentDictionary<string, EngineVersion> cachedCustomVersionReflectionData = new ConcurrentDictionary<string, EngineVersion>();
-        public static int GuessCustomVersionFromTypeAndEngineVersion(EngineVersion chosenVersion, Type typ)
+        public static int GuessCustomVersionFromTypeAndEngineVersion(EngineVersion chosenVersion, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type typ)
         {
             string typeString = typ.ToString();
             string[] allValsRaw = Enum.GetNames(typ);
@@ -926,7 +930,7 @@ namespace UAssetAPI
                 }
                 else
                 {
-                    var attributes = typ.GetMember(val)?[0]?.GetCustomAttributes(typeof(IntroducedAttribute), false);
+                    var attributes = typ.GetField(val)?.GetCustomAttributes(typeof(IntroducedAttribute), false);
                     attributeIntroducedVersion = (attributes == null || attributes.Length <= 0) ? EngineVersion.UNKNOWN : ((IntroducedAttribute)attributes[0]).IntroducedVersion;
                     cachedCustomVersionReflectionData[cacheKey] = attributeIntroducedVersion;
                 }
@@ -941,6 +945,9 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="chosenVersion">The version of the engine to check against.</param>
         /// <returns>A list of all the default custom version values for the given engine version.</returns>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
+#endif
         public static List<CustomVersion> GetDefaultCustomVersionContainer(EngineVersion chosenVersion)
         {
             List<CustomVersion> res = new List<CustomVersion>();
@@ -1142,7 +1149,13 @@ namespace UAssetAPI
         }
 
 
-        internal static JsonSerializerSettings jsonSettings = new JsonSerializerSettings
+        internal static JsonSerializerSettings jsonSettings = CreateJsonSettings();
+
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
+        private static JsonSerializerSettings CreateJsonSettings() => new JsonSerializerSettings
         {
             TypeNameHandling = TypeNameHandling.Objects,
             NullValueHandling = NullValueHandling.Include,
@@ -3258,6 +3271,10 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="jsonFormatting">The formatting to use for the returned JSON string.</param>
         /// <returns>A serialized JSON string that represents the asset.</returns>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public string SerializeJson(Formatting jsonFormatting)
         {
             Info = "Serialized with " + UAPUtils.DisplayVersion;
@@ -3270,6 +3287,8 @@ namespace UAssetAPI
         /// <param name="value">The object to serialize as JSON.</param>
         /// <param name="isFormatted">Whether or not the returned JSON string should be indented.</param>
         /// <returns>A serialized JSON string that represents the object.</returns>
+        [RequiresUnreferencedCode("Arbitrary object JSON requires the caller to preserve its model metadata.")]
+        [RequiresDynamicCode("Arbitrary object JSON may require generic instantiations unavailable to AOT.")]
         public string SerializeJsonObject(object value, bool isFormatted = false)
         {
             return SerializeJsonObject(value, isFormatted ? Formatting.Indented : Formatting.None);
@@ -3281,6 +3300,8 @@ namespace UAssetAPI
         /// <param name="value">The object to serialize as JSON.</param>
         /// <param name="jsonFormatting">The formatting to use for the returned JSON string.</param>
         /// <returns>A serialized JSON string that represents the object.</returns>
+        [RequiresUnreferencedCode("Arbitrary object JSON requires the caller to preserve its model metadata.")]
+        [RequiresDynamicCode("Arbitrary object JSON may require generic instantiations unavailable to AOT.")]
         public string SerializeJsonObject(object value, Formatting jsonFormatting)
         {
             return JsonConvert.SerializeObject(value, jsonFormatting, jsonSettings);
@@ -3290,6 +3311,8 @@ namespace UAssetAPI
         /// Deserializes an object from JSON.
         /// </summary>
         /// <param name="json">A serialized JSON string to parse.</param>
+        [RequiresUnreferencedCode("Arbitrary object JSON requires the caller to preserve its model metadata.")]
+        [RequiresDynamicCode("Arbitrary object JSON may require generic instantiations unavailable to AOT.")]
         public T DeserializeJsonObject<T>(string json)
         {
             Dictionary<FName, string> toBeFilled = new Dictionary<FName, string>();
@@ -3339,6 +3362,10 @@ namespace UAssetAPI
         /// Reads an asset from serialized JSON and initializes a new instance of the <see cref="UAsset"/> class to store its data in memory.
         /// </summary>
         /// <param name="json">A serialized JSON string to parse.</param>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public static UAsset DeserializeJson(string json)
         {
             Dictionary<FName, string> toBeFilled = new Dictionary<FName, string>();
@@ -3391,6 +3418,10 @@ namespace UAssetAPI
         /// Reads an asset from serialized JSON and initializes a new instance of the <see cref="UAsset"/> class to store its data in memory.
         /// </summary>
         /// <param name="stream">A stream containing serialized JSON string to parse.</param>
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public static UAsset DeserializeJson(Stream stream)
         {
             Dictionary<FName, string> toBeFilled = new Dictionary<FName, string>();

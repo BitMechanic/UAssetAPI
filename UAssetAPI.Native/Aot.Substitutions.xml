@@ -1,0 +1,25 @@
+<linker>
+  <!-- Native bridge only: no C# dynamic access or JValue-to-arbitrary-object API
+       is exposed. Typed JSON converters/indexers are retained. These unsupported
+       entry points throw if accidentally reached; their DLR/COM closure is removed. -->
+  <assembly fullname="Newtonsoft.Json">
+    <!-- AOT cannot compile dynamic code; make Json.NET's cached runtime probe
+         explicit so its unused Reflection.Emit factory is removed. -->
+    <type fullname="Newtonsoft.Json.Serialization.JsonTypeReflector">
+      <method signature="System.Boolean get_DynamicCodeGeneration()" body="stub" value="false" />
+    </type>
+    <type fullname="Newtonsoft.Json.Serialization.DefaultContractResolver">
+      <method signature="Newtonsoft.Json.Serialization.JsonDynamicContract CreateDynamicContract(System.Type)" body="remove" />
+    </type>
+    <type fullname="Newtonsoft.Json.Linq.JToken">
+      <method signature="System.Dynamic.DynamicMetaObject GetMetaObject(System.Linq.Expressions.Expression)" body="remove" />
+    </type>
+    <type fullname="Newtonsoft.Json.Linq.JObject">
+      <method signature="System.Dynamic.DynamicMetaObject GetMetaObject(System.Linq.Expressions.Expression)" body="remove" />
+    </type>
+    <type fullname="Newtonsoft.Json.Linq.JValue">
+      <method signature="System.Dynamic.DynamicMetaObject GetMetaObject(System.Linq.Expressions.Expression)" body="remove" />
+      <method signature="System.Object System.IConvertible.ToType(System.Type,System.IFormatProvider)" body="remove" />
+    </type>
+  </assembly>
+</linker>

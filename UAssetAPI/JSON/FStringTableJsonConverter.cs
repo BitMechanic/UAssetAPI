@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -46,6 +47,10 @@ namespace UAssetAPI.JSON
             get { return true; }
         }
 
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
             var dictionary = new FStringTable();

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -61,6 +62,10 @@ internal class TMapJsonConverter<TKey, TValue> : JsonConverter
 
     public override bool CanRead => true;
 
+#if RCT_NATIVE_BRIDGE
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
     public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
     {
         JToken tokens = JToken.Load(reader);

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using System;
@@ -19,6 +20,10 @@ namespace UAssetAPI.JSON
             return base.ResolveContractConverter(objectType);
         }
 
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public UAssetContractResolver(Dictionary<FName, string> toBeFilled) : base()
         {
             ToBeFilled = toBeFilled;

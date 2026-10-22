@@ -27,6 +27,10 @@
     <Authors>atenfyr</Authors>
     <PackageTags>UAssetAPI;UAsset;Asset;Serialization;UE4;UE5;Unreal;UnrealEngine;Modding</PackageTags>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(RCTNativeBridge)' == 'true'">
+    <!-- Member annotations are valid only with the native bridge's model roots. -->
+    <DefineConstants>$(DefineConstants);RCT_NATIVE_BRIDGE</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugType>full</DebugType>
     <DocumentationFile>bin\$(Configuration)\UAssetAPI.xml</DocumentationFile>

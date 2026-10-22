@@ -264,12 +264,12 @@ namespace UAssetAPI.Unversioned
 
             JmapObjectBase res = typeDiscriminator switch
             {
-                "Object" => JsonSerializer.Deserialize<JmapObject>(ref reader, options),
-                "Package" => JsonSerializer.Deserialize<JmapPackage>(ref reader, options),
-                "ScriptStruct" => JsonSerializer.Deserialize<JmapScriptStruct>(ref reader, options),
-                "Class" => JsonSerializer.Deserialize<JmapClass>(ref reader, options),
-                "Function" => JsonSerializer.Deserialize<JmapFunction>(ref reader, options),
-                "Enum" => JsonSerializer.Deserialize<JmapEnum>(ref reader, options),
+                "Object" => (JmapObject)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapObject))),
+                "Package" => (JmapPackage)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapPackage))),
+                "ScriptStruct" => (JmapScriptStruct)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapScriptStruct))),
+                "Class" => (JmapClass)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapClass))),
+                "Function" => (JmapFunction)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapFunction))),
+                "Enum" => (JmapEnum)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapEnum))),
                 _ => null,
             };
             res?.Type = typeDiscriminator;
@@ -325,21 +325,21 @@ namespace UAssetAPI.Unversioned
 
             JmapPropertyBase res = typeDiscriminator switch
             {
-                "StructProperty" => JsonSerializer.Deserialize<JmapStructProperty>(ref reader, options),
-                "ArrayProperty" => JsonSerializer.Deserialize<JmapArrayProperty>(ref reader, options),
-                "EnumProperty" => JsonSerializer.Deserialize<JmapEnumProperty>(ref reader, options),
-                "MapProperty" => JsonSerializer.Deserialize<JmapMapProperty>(ref reader, options),
-                "SetProperty" => JsonSerializer.Deserialize<JmapSetProperty>(ref reader, options),
-                "ByteProperty" => JsonSerializer.Deserialize<JmapByteProperty>(ref reader, options),
-                "ObjectProperty" => JsonSerializer.Deserialize<JmapObjectProperty>(ref reader, options),
-                "ClassProperty" => JsonSerializer.Deserialize<JmapClassProperty>(ref reader, options),
-                "WeakObjectProperty" => JsonSerializer.Deserialize<JmapWeakObjectProperty>(ref reader, options),
-                "SoftObjectProperty" => JsonSerializer.Deserialize<JmapSoftObjectProperty>(ref reader, options),
-                "SoftClassProperty" => JsonSerializer.Deserialize<JmapSoftClassProperty>(ref reader, options),
-                "LazyObjectProperty" => JsonSerializer.Deserialize<JmapLazyObjectProperty>(ref reader, options),
-                "InterfaceProperty" => JsonSerializer.Deserialize<JmapInterfaceProperty>(ref reader, options),
-                "OptionalProperty" => JsonSerializer.Deserialize<JmapOptionalProperty>(ref reader, options),
-                _ => JsonSerializer.Deserialize<JmapProperty>(ref reader, options),
+                "StructProperty" => (JmapStructProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapStructProperty))),
+                "ArrayProperty" => (JmapArrayProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapArrayProperty))),
+                "EnumProperty" => (JmapEnumProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapEnumProperty))),
+                "MapProperty" => (JmapMapProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapMapProperty))),
+                "SetProperty" => (JmapSetProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapSetProperty))),
+                "ByteProperty" => (JmapByteProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapByteProperty))),
+                "ObjectProperty" => (JmapObjectProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapObjectProperty))),
+                "ClassProperty" => (JmapClassProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapClassProperty))),
+                "WeakObjectProperty" => (JmapWeakObjectProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapWeakObjectProperty))),
+                "SoftObjectProperty" => (JmapSoftObjectProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapSoftObjectProperty))),
+                "SoftClassProperty" => (JmapSoftClassProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapSoftClassProperty))),
+                "LazyObjectProperty" => (JmapLazyObjectProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapLazyObjectProperty))),
+                "InterfaceProperty" => (JmapInterfaceProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapInterfaceProperty))),
+                "OptionalProperty" => (JmapOptionalProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapOptionalProperty))),
+                _ => (JmapProperty)JsonSerializer.Deserialize(ref reader, options.GetTypeInfo(typeof(JmapProperty))),
             };
             res.Type = typeDiscriminator;
 
@@ -584,12 +584,12 @@ namespace UAssetAPI.Unversioned
 
         public static JmapObjectBase GetObjectBase(string objectJSON, JsonSerializerOptions options = null)
         {
-            return JsonSerializer.Deserialize<JmapObjectBase>(objectJSON, options ?? Usmap.SerializerOptions ?? JmapDefaultOptions());
+            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, (options ?? Usmap.SerializerOptions ?? JmapDefaultOptions()).GetTypeInfo(typeof(JmapObjectBase)));
         }
 
         public static JmapObjectBase GetObjectBase(ReadOnlySpan<byte> objectJSON, JsonSerializerOptions options = null)
         {
-            return JsonSerializer.Deserialize<JmapObjectBase>(objectJSON, options ?? Usmap.SerializerOptions ?? JmapDefaultOptions());
+            return (JmapObjectBase)JsonSerializer.Deserialize(objectJSON, (options ?? Usmap.SerializerOptions ?? JmapDefaultOptions()).GetTypeInfo(typeof(JmapObjectBase)));
         }
 
         public static void ReadSchema(JmapObjectBase objectBase, UsmapSchema templateSchema)

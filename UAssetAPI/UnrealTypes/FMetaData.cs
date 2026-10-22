@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -80,6 +81,10 @@ public class FMetaData
 
         public override bool CanRead => true;
 
+#if RCT_NATIVE_BRIDGE
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)

@@ -10,3 +10,6 @@ UAssetAPI.Benchmark/bin
 UAssetAPI.Benchmark/obj
 UAssetAPI.Tests/bin
 UAssetAPI.Tests/obj
+UAssetAPI.Native/bin
+UAssetAPI.Native/obj
+UAssetAPI.Native/publish

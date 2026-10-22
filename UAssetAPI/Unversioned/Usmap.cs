@@ -3,6 +3,7 @@ using Newtonsoft.Json.Converters;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -616,6 +617,8 @@ namespace UAssetAPI.Unversioned
         /// The serialized JSON is lossy and cannot be converted back into a complete .usmap file.
         /// </summary>
         /// <returns>The serialized JSON as a string.</returns>
+        [RequiresUnreferencedCode("Diagnostic mapping export reflects over the complete mapping model.")]
+        [RequiresDynamicCode("Diagnostic mapping export is not part of the native asset bridge.")]
         public string SerializeJSON(Formatting jsonFormatting = Formatting.None)
         {
             return JsonConvert.SerializeObject(this, jsonFormatting);
@@ -903,6 +906,8 @@ namespace UAssetAPI.Unversioned
         /// <param name="headerPrefix">The prefix of the subheader for each relevant schema.</param>
         /// <param name="headerSuffix">The suffix of the subheader for each relevant schema.</param>
         /// <returns>An annotated, human-readable text file containing the properties that the schema can reference.</returns>
+        [RequiresUnreferencedCode("Diagnostic mapping defaults may contain caller-provided object types.")]
+        [RequiresDynamicCode("Diagnostic mapping defaults use general-purpose reflection serialization.")]
         public string GetAllPropertiesAnnotated(string schemaName, UAsset asset, IDictionary<string, string> customAnnotations = null, bool recursive = true, string headerPrefix = "--- ", string headerSuffix = " ---")
         {
             string tab = "    ";

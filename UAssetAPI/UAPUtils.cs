@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -59,11 +60,14 @@ namespace UAssetAPI
         internal static bool _commitAssigned = false;
         internal static string _currentCommit = string.Empty;
 
+        [RequiresUnreferencedCode("Arbitrary object JSON requires the caller to preserve its model metadata.")]
+        [RequiresDynamicCode("Arbitrary object JSON may require generic instantiations unavailable to AOT.")]
         public static string SerializeJson(object obj, bool isFormatted)
         {
             return JsonConvert.SerializeObject(obj, isFormatted ? Formatting.Indented : Formatting.None, UAsset.jsonSettings);
         }
 
+        [RequiresUnreferencedCode("Traverses arbitrary objects, including non-public fields and properties.")]
         public static List<T> FindAllInstances<T>(object parent) where T : class
         {
             HashSet<object> yaExplorado = new HashSet<object>();
@@ -74,6 +78,7 @@ namespace UAssetAPI
             return res;
         }
 
+        [RequiresUnreferencedCode("Traverses arbitrary objects, including non-public fields and properties.")]
         private static void FindAllInstances<T>(object value, HashSet<object> yaExplorado, List<T> res) where T : class
         {
             if (value == null) return;
@@ -115,24 +120,24 @@ namespace UAssetAPI
             else return val;
         }
 
-        public static FieldInfo[] GetOrderedFields<T>()
+        public static FieldInfo[] GetOrderedFields<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] T>()
         {
             return GetOrderedFields(typeof(T));
         }
 
-        public static FieldInfo[] GetOrderedFields(Type t)
+        public static FieldInfo[] GetOrderedFields([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type t)
         {
             return t.GetFields().Where(fld => fld.IsDefined(typeof(DisplayIndexOrderAttribute), true)).OrderBy(fld => ((DisplayIndexOrderAttribute[])fld.GetCustomAttributes(typeof(DisplayIndexOrderAttribute), true))[0].DisplayingIndex).ToArray();
         }
 
-        public static MemberInfo[] GetOrderedMembers<T>()
+        public static MemberInfo[] GetOrderedMembers<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>()
         {
             return GetOrderedMembers(typeof(T));
         }
 
-        public static MemberInfo[] GetOrderedMembers(Type t)
+        public static MemberInfo[] GetOrderedMembers([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type t)
         {
-            return t.GetMembers().Where(fld => fld.IsDefined(typeof(DisplayIndexOrderAttribute), true)).OrderBy(fld => ((DisplayIndexOrderAttribute[])fld.GetCustomAttributes(typeof(DisplayIndexOrderAttribute), true))[0].DisplayingIndex).Where(x => x.MemberType == MemberTypes.Field || x.MemberType == MemberTypes.Property).ToArray();
+            return t.GetProperties().Cast<MemberInfo>().Concat(t.GetFields()).Where(fld => fld.IsDefined(typeof(DisplayIndexOrderAttribute), true)).OrderBy(fld => ((DisplayIndexOrderAttribute[])fld.GetCustomAttributes(typeof(DisplayIndexOrderAttribute), true))[0].DisplayingIndex).ToArray();
         }
 
         // https://stackoverflow.com/a/33446914

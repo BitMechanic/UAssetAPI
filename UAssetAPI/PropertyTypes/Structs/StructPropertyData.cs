@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using UAssetAPI.CustomVersions;
 using UAssetAPI.ExportTypes;
 using UAssetAPI.PropertyTypes.Objects;
@@ -88,7 +89,7 @@ public class StructPropertyData : PropertyData<List<PropertyData>>
     private static readonly FString CurrentPropertyType = new FString("StructProperty");
     public override FString PropertyType => CurrentPropertyType;
 
-    private void ReadOnce(AssetBinaryReader reader, Type T, long offset, long leng1)
+    private void ReadOnce(AssetBinaryReader reader, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type T, long offset, long leng1)
     {
         if (Activator.CreateInstance(T, Name) is not PropertyData data) return;
         data.Offset = offset;

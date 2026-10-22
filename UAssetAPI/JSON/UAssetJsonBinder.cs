@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using System;
@@ -12,6 +13,10 @@ internal sealed class UAssetJsonBinder : ISerializationBinder
 {
     private readonly Type explicitRoot;
     private readonly DefaultSerializationBinder resolver = new();
+#if RCT_NATIVE_BRIDGE
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
+#endif
     internal UAssetJsonBinder(Type explicitRoot) { this.explicitRoot = explicitRoot; }
 
     public Type BindToType(string assemblyName, string typeName)
