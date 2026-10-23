@@ -15,7 +15,8 @@ public static unsafe class Exports
     private static readonly object[] AotCollections = {
         new List<UAssetAPI.ExportTypes.SerializedInterfaceReference>(),
         new List<FFrameNumber>(),
-        new List<UAssetAPI.Kismet.Bytecode.Expressions.FKismetSwitchCase>()
+        new List<UAssetAPI.Kismet.Bytecode.Expressions.FKismetSwitchCase>(),
+        new List<FNiagaraVariableCommonReference>()
     };
 
     [UnmanagedCallersOnly(EntryPoint = "rct_uasset_abi_version", CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -31,7 +32,10 @@ public static unsafe class Exports
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UAssetAPI.ExportTypes.SerializedInterfaceReference>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<FFrameNumber>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UAssetAPI.Kismet.Bytecode.Expressions.FKismetSwitchCase>))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<FNiagaraVariableCommonReference>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SortedDictionary<FPackageIndex, List<FName>>))]
+    // Json.NET reflects the Key/Value properties and constructor of package build dependencies.
+    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors, typeof(KeyValuePair<FName, uint>))]
     [UnmanagedCallersOnly(EntryPoint = "rct_uasset_process", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Process(int operation, byte* input, byte* output, byte* options, byte* error, int capacity)
     {

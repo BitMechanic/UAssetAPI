@@ -30,6 +30,11 @@ members, built-in properties, fields and custom-version enum attributes.
 `Exports.PreserveEnumConverter` preserves the enum converter constructor;
 `Exports.Process` preserves the concrete
 value-type collections established by prior Blueprint/Animation AOT evidence.
+The existing Control Rig, Material and Niagara captures additionally require
+the public properties/constructor of `KeyValuePair<FName, uint>` (package build
+dependencies); Niagara requires the concrete
+`List<FNiagaraVariableCommonReference>` instantiation and retained members.
+These are explicit dependencies, not additional diagnostic suppressions.
 The `RCTNativeBridge=true` project reference enables `RCT_NATIVE_BRIDGE` only
 for this build. Each `UnconditionalSuppressMessage` is on its exact method and
 has a justification; it is not attached to the assembly or all methods of a type.
@@ -69,6 +74,20 @@ The 123-message pre-repair log is retained, along with the warning-free build.
 Zero emitted diagnostics includes justified native-only annotations and removal
 of unsupported internal APIs; it does not mean every warning was fixed by removing
 reflection, nor does it complete AN-2, Supabase or default/legacy cutover.
+
+The 2026-10-23 capture repair reuses `CR_Mannequin_FootIK`, `NS_JumpPad`,
+`M_FlatCol`, `BP_PinMatrix` and the native-baseline `ABP_Unarmed`. All five pass
+native capture, describe and restore with exact input/output bytes. Existing-output,
+malformed-JSON and invalid-operation refusals preserve outputs and leave no staging
+files. The publish still emits zero IL diagnostics. Eighteen focused managed tests
+pass, including four new Niagara variable cases and existing JSON-ingress/pin tests.
+Niagara also needed `[JsonProperty]` on four existing native-payload fields:
+`VariableName`, `TypeDef`, `VarData` and `VariableOffset`. This managed serializer
+omission was independent of AOT; `NS_JumpPad` now retains all 795,908 input bytes
+instead of losing 102,200 bytes. No new binary codec or serializer was introduced.
+These checks establish preservation of the existing assets, not new editor/import
+or relocation coverage. Exact build identities and retained red/green evidence live
+in the shared `PATTERN-CONSOLIDATION/CAPTURE_REPAIR_REPORT.md`.
 
 The project reference shares the library's `bin`/`obj` directories with ordinary
 managed builds. A native publish leaves a bridge-profile library assembly there.
