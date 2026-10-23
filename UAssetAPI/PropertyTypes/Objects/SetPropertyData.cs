@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using System;
 using UAssetAPI.UnrealTypes;
 using UAssetAPI.Unversioned;
@@ -9,6 +10,7 @@ namespace UAssetAPI.PropertyTypes.Objects;
 /// </summary>
 public class SetPropertyData : ArrayPropertyData
 {
+    [JsonProperty]
     public PropertyData[] ElementsToRemove = null;
 
     public SetPropertyData(FName name) : base(name)

@@ -266,6 +266,85 @@ public class PackageBindingTests
     }
 
     [TestMethod]
+    public void NestedSelfReferenceRelocatesThroughBinaryRoundTrip()
+    {
+        var asset = Rehydrate("BP_SoftReference.uasset");
+        var cdo = Cdo(asset, "Default__Source_C");
+        var self = asset.SoftObjectPathList.First(p => p.AssetPath.PackageName.ToString() == asset.FolderName.Value);
+        var external = ((SoftObjectPropertyData)cdo.Data.Single(p => p.Name.ToString() == "SoftAsset")).Value;
+        cdo.Data.Add(new ArrayPropertyData(FName.FromString(asset, "NestedSelf"))
+        {
+            ArrayType = FName.FromString(asset, "SoftObjectProperty"),
+            PropertyTypeName = new FPropertyTypeName(new List<FPropertyTypeNameNode> {
+                new() { Name = new FName(asset, "ArrayProperty"), InnerCount = 1 },
+                new() { Name = new FName(asset, "SoftObjectProperty"), InnerCount = 0 },
+            }, true),
+            Value = new PropertyData[] {
+                new SoftObjectPropertyData(FName.FromString(asset, "0")) { Value = self },
+                new SoftObjectPropertyData(FName.FromString(asset, "1")) { Value = external },
+            },
+        });
+        string[] names = Names(asset);
+        var destinations = new Dictionary<string, string> {
+            ["/Game/UAssetAPIProbe/UserParent.UserParent_C"] = "UserParent_C",
+        };
+        PackageBinding.Apply(asset, new Dictionary<string, string> {
+            [asset.FolderName.Value] = "/Game/S1Lifecycle/Source",
+        }, destinations);
+        var after = Reread(UAsset.DeserializeJson(asset.SerializeJson()));
+        var nested = (ArrayPropertyData)Cdo(after, "Default__Source_C").Data.Single(p => p.Name.ToString() == "NestedSelf");
+        var relocated = ((SoftObjectPropertyData)nested.Value[0]).Value;
+        Assert.AreEqual("/Game/S1Lifecycle/Source", relocated.AssetPath.PackageName.ToString());
+        Assert.AreEqual(self.AssetPath.AssetName.ToString(), relocated.AssetPath.AssetName.ToString());
+        Assert.AreEqual(self.SubPathString?.Value, relocated.SubPathString?.Value);
+        Assert.AreEqual(external, ((SoftObjectPropertyData)nested.Value[1]).Value, "external dependency unchanged");
+        CollectionAssert.AreEqual(names, Names(asset).Take(names.Length).ToArray(), "existing name entries unchanged");
+        CollectionAssert.AreEqual(after.WriteData().ToArray(), Reread(after).WriteData().ToArray(), "stable rewrite");
+    }
+
+    [DataTestMethod]
+    [DataRow("set")]
+    [DataRow("map")]
+    [DataRow("optional")]
+    public void NestedSelfRemovalAndOptionalRelocate(string holder)
+    {
+        var asset = Rehydrate("BP_SoftReference.uasset");
+        var cdo = Cdo(asset, "Default__Source_C");
+        var self = asset.SoftObjectPathList.First(p => p.AssetPath.PackageName.ToString() == asset.FolderName.Value);
+        var external = ((SoftObjectPropertyData)cdo.Data.Single(p => p.Name.ToString() == "SoftAsset")).Value;
+        var name = FName.FromString(asset, "NestedSelf");
+        var inner = new SoftObjectPropertyData(name) { Value = self };
+        PropertyData nested = holder switch
+        {
+            "set" => new SetPropertyData(name) { ArrayType = new FName(asset, "SoftObjectProperty"), Value = Array.Empty<PropertyData>(), ElementsToRemove = new PropertyData[] { inner } },
+            "map" => new MapPropertyData(name) { KeyType = new FName(asset, "SoftObjectProperty"), ValueType = new FName(asset, "IntProperty"), Value = new TMap<PropertyData, PropertyData>(), KeysToRemove = new PropertyData[] { inner } },
+            _ => new OptionalPropertyData(name) { InnerType = new FName(asset, "SoftObjectProperty"), Value = inner },
+        };
+        var typeNodes = new List<FPropertyTypeNameNode> {
+            new() { Name = new FName(asset, holder == "set" ? "SetProperty" : holder == "map" ? "MapProperty" : "OptionalProperty"), InnerCount = holder == "map" ? 2 : 1 },
+            new() { Name = new FName(asset, "SoftObjectProperty"), InnerCount = 0 },
+        };
+        if (holder == "map") typeNodes.Add(new() { Name = new FName(asset, "IntProperty"), InnerCount = 0 });
+        nested.PropertyTypeName = new FPropertyTypeName(typeNodes, true);
+        cdo.Data.Add(nested);
+        PackageBinding.Apply(asset, new Dictionary<string, string> { [asset.FolderName.Value] = "/Game/S1Lifecycle/Source" },
+            new Dictionary<string, string> { ["/Game/UAssetAPIProbe/UserParent.UserParent_C"] = "UserParent_C" });
+        var after = Reread(UAsset.DeserializeJson(asset.SerializeJson()));
+        var reread = Cdo(after, "Default__Source_C").Data.Single(p => p.Name.ToString() == "NestedSelf");
+        var value = (SoftObjectPropertyData)(reread switch {
+            SetPropertyData set => set.ElementsToRemove[0],
+            MapPropertyData map => map.KeysToRemove[0],
+            OptionalPropertyData optional => optional.Value,
+            _ => throw new AssertFailedException("Unexpected holder"),
+        });
+        Assert.AreEqual("/Game/S1Lifecycle/Source", value.Value.AssetPath.PackageName.ToString());
+        Assert.AreEqual(self.AssetPath.AssetName.ToString(), value.Value.AssetPath.AssetName.ToString());
+        Assert.AreEqual(self.SubPathString?.Value, value.Value.SubPathString?.Value);
+        Assert.AreEqual(external, ((SoftObjectPropertyData)Cdo(after, "Default__Source_C").Data.Single(p => p.Name.ToString() == "SoftAsset")).Value);
+        CollectionAssert.AreEqual(after.WriteData().ToArray(), Reread(after).WriteData().ToArray());
+    }
+
+    [TestMethod]
     public void NestedSoftValueRefuses()
     {
         var asset = Rehydrate("BP_SoftReference.uasset");
