@@ -84,6 +84,9 @@ public class InstancedStructPropertyData : PropertyData<StructPropertyData>
         {
             MainSerializer.Write(current, writer, true);
         }
+        // Read consumes a tagged property list, including its None terminator.
+        // Omitting it makes an array reader consume the next struct's type index.
+        if (!writer.Asset.HasUnversionedProperties) writer.Write(new FName(writer.Asset, "None"));
 
         var end = writer.BaseStream.Position;
         SerialSize = (int)(end - saved - sizeof(int));
