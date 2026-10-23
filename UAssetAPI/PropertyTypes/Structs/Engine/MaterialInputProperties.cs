@@ -1,21 +1,22 @@
 using UAssetAPI.PropertyTypes.Objects;
 using UAssetAPI.UnrealTypes;
 using UAssetAPI.CustomVersions;
+using Newtonsoft.Json;
 
 namespace UAssetAPI.PropertyTypes.Structs;
 
 public abstract class MaterialInputPropertyData<T> : PropertyData<T>
 {
-    public FPackageIndex Expression;
-    public int OutputIndex;
-    public FName InputName;
-    public FString InputNameOld;
-    public int Mask;
-    public int MaskR;
-    public int MaskG;
-    public int MaskB;
-    public int MaskA;
-    public FName ExpressionName;
+    [JsonProperty] public FPackageIndex Expression;
+    [JsonProperty] public int OutputIndex;
+    [JsonProperty] public FName InputName;
+    [JsonProperty] public FString InputNameOld;
+    [JsonProperty] public int Mask;
+    [JsonProperty] public int MaskR;
+    [JsonProperty] public int MaskG;
+    [JsonProperty] public int MaskB;
+    [JsonProperty] public int MaskA;
+    [JsonProperty] public FName ExpressionName;
 
     public MaterialInputPropertyData() { }
 
