@@ -512,6 +512,13 @@ namespace UAssetAPI
                 ArrayIndex = reader.ReadInt32();
             }
 
+            // Unknown native tails may resemble a property tag. Reject impossible
+            // payload sizes before a speculative parser allocates them; the existing
+            // export fallback can then preserve that tail as opaque bytes.
+            if (!reader.Asset.HasUnversionedProperties &&
+                (leng < 0 || (reader.BaseStream.CanSeek && leng > reader.BaseStream.Length - reader.BaseStream.Position)))
+                throw new FormatException($"Invalid property length {leng} at byte {startingOffset}");
+
             PropertyData result = TypeToClass(type, name, ancestry, parentName, parentModulePath, reader.Asset, reader, leng, propertyTagFlags, ArrayIndex, includeHeader, isZero, typeName);
             if (structType != null && result is StructPropertyData strucProp) strucProp.StructType = FName.DefineDummy(reader.Asset, structType);
             result.Offset = startingOffset;

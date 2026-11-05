@@ -40,7 +40,8 @@ internal sealed class UAssetJsonBinder : ISerializationBinder
             bool container = definition == typeof(List<>) || definition == typeof(Dictionary<,>) ||
                 definition == typeof(SortedDictionary<,>) || definition == typeof(HashSet<>) ||
                 definition == typeof(KeyValuePair<,>) || definition == typeof(Nullable<>) ||
-                definition == typeof(Tuple<,>) || definition == typeof(Tuple<,,>);
+                definition == typeof(Tuple<,>) || definition == typeof(Tuple<,,>) ||
+                definition == typeof(ValueTuple<,>);
             return (container || type.Assembly == typeof(UAsset).Assembly) && type.GetGenericArguments().All(Allowed);
         }
         return type.Assembly == typeof(UAsset).Assembly || type.IsPrimitive || type == typeof(string) ||

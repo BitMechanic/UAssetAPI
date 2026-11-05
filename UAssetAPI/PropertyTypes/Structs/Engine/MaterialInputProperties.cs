@@ -17,6 +17,7 @@ public abstract class MaterialInputPropertyData<T> : PropertyData<T>
     [JsonProperty] public int MaskB;
     [JsonProperty] public int MaskA;
     [JsonProperty] public FName ExpressionName;
+    [JsonProperty] public bool UseConstant;
 
     public MaterialInputPropertyData() { }
 
@@ -126,7 +127,7 @@ public class MaterialAttributesInputPropertyData : MaterialInputPropertyData<int
     public override FString PropertyType => CurrentPropertyType;
 }
 
-public class ColorMaterialInputPropertyData : MaterialInputPropertyData<ColorPropertyData>
+public class ColorMaterialInputPropertyData : MaterialInputPropertyData<PropertyData>
 {
     public ColorMaterialInputPropertyData(FName name) : base(name) { }
 
@@ -140,8 +141,9 @@ public class ColorMaterialInputPropertyData : MaterialInputPropertyData<ColorPro
     {
         base.Read(reader, includeHeader, leng1, leng2, serializationContext);
 
-        reader.ReadInt32(); // bUseConstantValue; always false
-        Value = new ColorPropertyData(Name);
+        UseConstant = reader.ReadBooleanInt();
+        Value = reader.Asset.GetCustomVersion<FFortniteMainBranchObjectVersion>() >= FFortniteMainBranchObjectVersion.MaterialInputUsesLinearColor
+            ? new LinearColorPropertyData(Name) : new ColorPropertyData(Name);
         Value.Ancestry.Initialize(Ancestry, Name);
         Value.Read(reader, false, 0);
     }
@@ -158,7 +160,7 @@ public class ColorMaterialInputPropertyData : MaterialInputPropertyData<ColorPro
     public override int Write(AssetBinaryWriter writer, bool includeHeader, PropertySerializationContext serializationContext = PropertySerializationContext.Normal)
     {
         int expLength = base.Write(writer, includeHeader, serializationContext);
-        writer.Write(0);
+        writer.Write(UseConstant ? 1 : 0);
         return expLength + Value.Write(writer, false) + sizeof(int);
     }
 }
@@ -177,7 +179,7 @@ public class ScalarMaterialInputPropertyData : MaterialInputPropertyData<float>
     {
         base.Read(reader, includeHeader, leng1, leng2, serializationContext);
 
-        reader.ReadInt32(); // bUseConstantValue; always false
+        UseConstant = reader.ReadBooleanInt();
         Value = reader.ReadSingle();
     }
 
@@ -189,7 +191,7 @@ public class ScalarMaterialInputPropertyData : MaterialInputPropertyData<float>
         }
 
         int expLength = WriteExpressionInput(writer, false);
-        writer.Write(0);
+        writer.Write(UseConstant ? 1 : 0);
         writer.Write(Value);
         return expLength + sizeof(float) + sizeof(int);
     }
@@ -209,10 +211,11 @@ public class VectorMaterialInputPropertyData : MaterialInputPropertyData<VectorP
     {
         base.Read(reader, includeHeader, leng1, leng2, serializationContext);
 
-        reader.ReadInt32(); // bUseConstantValue; always false
+        UseConstant = reader.ReadBooleanInt();
         Value = new VectorPropertyData(Name);
         Value.Ancestry.Initialize(Ancestry, Name);
-        Value.Read(reader, false, 0);
+        // MaterialShared.cpp serializes FVector3f even for large-world packages.
+        Value.Value = new FVector(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
     }
 
     public override void ResolveAncestries(UAsset asset, AncestryInfo ancestrySoFar)
@@ -232,8 +235,11 @@ public class VectorMaterialInputPropertyData : MaterialInputPropertyData<VectorP
         }
 
         int expLength = WriteExpressionInput(writer, false);
-        writer.Write(0);
-        return expLength + Value.Write(writer, false) + sizeof(int);
+        writer.Write(UseConstant ? 1 : 0);
+        writer.Write(Value.Value.XFloat);
+        writer.Write(Value.Value.YFloat);
+        writer.Write(Value.Value.ZFloat);
+        return expLength + sizeof(float) * 3 + sizeof(int);
     }
 }
 
@@ -251,10 +257,11 @@ public class Vector2MaterialInputPropertyData : MaterialInputPropertyData<Vector
     {
         base.Read(reader, includeHeader, leng1, leng2, serializationContext);
 
-        reader.ReadInt32(); // bUseConstantValue; always false
+        UseConstant = reader.ReadBooleanInt();
         Value = new Vector2DPropertyData(Name);
         Value.Ancestry.Initialize(Ancestry, Name);
-        Value.Read(reader, false, 0);
+        // MaterialShared.cpp serializes FVector2f even for large-world packages.
+        Value.Value = new FVector2D(reader.ReadSingle(), reader.ReadSingle());
     }
 
     public override void ResolveAncestries(UAsset asset, AncestryInfo ancestrySoFar)
@@ -274,7 +281,9 @@ public class Vector2MaterialInputPropertyData : MaterialInputPropertyData<Vector
         }
 
         int expLength = WriteExpressionInput(writer, false);
-        writer.Write(0);
-        return expLength + Value.Write(writer, false) + sizeof(int);
+        writer.Write(UseConstant ? 1 : 0);
+        writer.Write(Value.Value.XFloat);
+        writer.Write(Value.Value.YFloat);
+        return expLength + sizeof(float) * 2 + sizeof(int);
     }
 }

@@ -36,6 +36,8 @@ public static unsafe class Exports
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SortedDictionary<FPackageIndex, List<FName>>))]
     // Json.NET reflects the Key/Value properties and constructor of package build dependencies.
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors, typeof(KeyValuePair<FName, uint>))]
+    // Niagara generated-function specifiers serialize the two public fields of this value tuple.
+    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicConstructors, typeof(ValueTuple<FName, FName>))]
     [UnmanagedCallersOnly(EntryPoint = "rct_uasset_process", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Process(int operation, byte* input, byte* output, byte* options, byte* error, int capacity)
     {
@@ -56,7 +58,7 @@ public static unsafe class Exports
                 if (operation < 0 || operation > 2) throw new ArgumentOutOfRangeException(nameof(operation));
                 var asset = operation == 0
                     ? new UAsset(source, EngineVersion.VER_UE5_8, customSerializationFlags: CustomSerializationFlags.SkipPreloadDependencyLoading)
-                    : UAsset.DeserializeJson(File.ReadAllText(source));
+                    : UAsset.DeserializeJson(File.OpenRead(source));
                 if (asset.UseSeparateBulkDataFiles || asset.HasUnversionedProperties || asset.IsFilterEditorOnly)
                     throw new NotSupportedException("The editor bridge requires a self-contained, versioned, uncooked asset");
                 string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -64,12 +66,15 @@ public static unsafe class Exports
                 {
                     if (operation == 0)
                     {
-                        string json = asset.SerializeJson();
                         using var original = asset.WriteData();
-                        using var restored = UAsset.DeserializeJson(json).WriteData();
+                        // Use the existing staging file/stream reader so large Niagara
+                        // captures do not keep a second full UTF-16 JSON string alive
+                        // alongside Json.NET's metadata buffer and reconstructed model.
+                        File.WriteAllText(temporary, asset.SerializeJson(), new UTF8Encoding(false));
+                        asset = null;
+                        using var restored = UAsset.DeserializeJson(File.OpenRead(temporary)).WriteData();
                         if (!original.ToArray().AsSpan().SequenceEqual(restored.ToArray()))
                             throw new InvalidDataException("JSON reconstruction changes the serialized asset");
-                        File.WriteAllText(temporary, json, new UTF8Encoding(false));
                     }
                     else if (operation == 1)
                     {

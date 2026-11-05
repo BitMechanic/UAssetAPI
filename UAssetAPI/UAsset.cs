@@ -3427,6 +3427,7 @@ namespace UAssetAPI
             Dictionary<FName, string> toBeFilled = new Dictionary<FName, string>();
             var serializer = JsonSerializer.Create(new JsonSerializerSettings
             {
+                CheckAdditionalContent = true,
                 TypeNameHandling = TypeNameHandling.Objects,
                 SerializationBinder = new UAssetJsonBinder(typeof(UAsset)),
                 NullValueHandling = NullValueHandling.Include,

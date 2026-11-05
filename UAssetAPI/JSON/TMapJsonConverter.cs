@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections;
 using System.Collections.Specialized;
@@ -68,19 +67,29 @@ internal class TMapJsonConverter<TKey, TValue> : JsonConverter
 #endif
     public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
     {
-        JToken tokens = JToken.Load(reader);
-        if (tokens is null || tokens.Type == JTokenType.Null)
-        {
-            return null;
-        }
+        if (reader.TokenType == JsonToken.None && !reader.Read())
+            throw new JsonSerializationException("Missing TMap array");
+        if (reader.TokenType == JsonToken.Null) return null;
+        if (reader.TokenType != JsonToken.StartArray)
+            throw new JsonSerializationException("Expected a TMap entry array");
 
+        // Consume one pair at a time. Loading another JToken tree duplicates large
+        // Niagara maps already buffered by Json.NET's metadata read-ahead.
         var dictionary = new TMap<TKey, TValue>();
-        foreach (var eachToken in tokens)
+        while (reader.Read() && reader.TokenType != JsonToken.EndArray)
         {
-            TKey key = eachToken[0].ToObject<TKey>(serializer);
-            TValue value = eachToken[1].ToObject<TValue>(serializer);
+            if (reader.TokenType != JsonToken.StartArray || !reader.Read())
+                throw new JsonSerializationException("Expected a TMap key/value pair");
+            TKey key = serializer.Deserialize<TKey>(reader);
+            if (!reader.Read() || reader.TokenType == JsonToken.EndArray)
+                throw new JsonSerializationException("Missing TMap value");
+            TValue value = serializer.Deserialize<TValue>(reader);
+            if (!reader.Read() || reader.TokenType != JsonToken.EndArray)
+                throw new JsonSerializationException("Expected exactly two items in a TMap pair");
             dictionary.Add(key, value);
         }
+        if (reader.TokenType != JsonToken.EndArray)
+            throw new JsonSerializationException("Unterminated TMap array");
         return dictionary;
     }
 }

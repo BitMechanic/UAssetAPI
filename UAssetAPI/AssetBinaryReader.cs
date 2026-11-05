@@ -112,8 +112,13 @@ public class UnrealBinaryReader : BinaryReader
     public virtual FString ReadFString()
     {
         int length = this.ReadInt32();
-        if (Math.Abs((long)length) > MainSerializer.MaxSerializedArrayLength)
+        // Registry tags (notably Control Rig data) can contain multi-megabyte strings.
+        // Bound the actual allocation and available bytes, not an unrelated array-element limit.
+        long byteLength = length < 0 ? -(long)length * 2 : length;
+        if (byteLength > Array.MaxLength)
             throw new FormatException($"Invalid FString length {length} at byte {BaseStream.Position - 4}");
+        if (BaseStream.CanSeek && byteLength > BaseStream.Length - BaseStream.Position)
+            throw new EndOfStreamException($"Truncated FString at byte {BaseStream.Position - 4}");
         switch (length)
         {
             case < 0:

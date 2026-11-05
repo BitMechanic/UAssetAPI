@@ -18,6 +18,25 @@ public class JsonIngressTests
     private static UAsset Read() => new(Fixture, EngineVersion.VER_UE5_8, customSerializationFlags: CustomSerializationFlags.SkipPreloadDependencyLoading);
 
     [TestMethod]
+    public void StreamJsonRejectsTrailingContentButAllowsWhitespace()
+    {
+        var original = Read();
+        string json = original.SerializeJson();
+        using var valid = new MemoryStream(Encoding.UTF8.GetBytes(json + " \r\n\t"));
+        using var restored = UAsset.DeserializeJson(valid).WriteData();
+        using var expected = original.WriteData();
+        CollectionAssert.AreEqual(expected.ToArray(), restored.ToArray());
+        foreach (string suffix in new[] { " trailing", " {}" })
+        {
+            using var input = new MemoryStream(Encoding.UTF8.GetBytes(json + suffix));
+            bool refused = false;
+            try { UAsset.DeserializeJson(input); }
+            catch (JsonException) { refused = true; }
+            Assert.IsTrue(refused, "Reject appended content: " + suffix);
+        }
+    }
+
+    [TestMethod]
     public void AllJsonIngressesRejectUnrelatedTypeMetadata()
     {
         const string json = "{\"$type\":\"System.IO.FileInfo, System.Private.CoreLib\",\"fileName\":\"untrusted\"}";

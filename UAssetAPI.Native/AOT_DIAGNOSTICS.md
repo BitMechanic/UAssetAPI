@@ -98,6 +98,41 @@ applies to that build, not every later file at the same path. The profile change
 only diagnostic attributes and internal constants. A normal rebuild restores the
 ordinary managed diagnostic contract.
 
+The 2026-11-04 Content Examples repair retains the public fields and constructors
+of `ValueTuple<FName,FName>`, used by Niagara generated-function specifiers.
+The JSON binder now admits the standard two-value container while recursively
+checking its element types; it does not admit arbitrary framework types.
+No analyzer suppression or substitution was added. The native build emits zero
+warnings/errors. The retained Material, large Control Rig and Niagara failure
+representatives pass capture/describe/restore with exact original bytes. The
+Niagara offline restore uses the manifest's identity destination catalogue;
+that is a serialization check, not proof of receiver dependency availability.
+Focused managed tests also cover current/legacy Material constant layouts,
+the constant-selection bit, large valid FString values, malformed lengths and
+oversized property-tag refusal before allocation. Reports and exact native/live
+identities are retained in `TC5-LIB/CONVERTER-REPAIRS` in the shared project index.
+The same retry exposed large-map memory amplification. `TMapJsonConverter` now
+reads key/value pairs without cloning a full JToken tree; the bridge reuses its
+staging file and existing stream deserializer instead of retaining another full
+JSON string. Metadata read-ahead and binder behavior remain enabled. The final
+warning-free DLL passes four exact-byte native round trips (the previous three
+representatives plus `3DGasColoredSmoke`, whose JSON is 234,950,778 bytes) with a
+reported 4 GiB per-process managed heap cap; the original launch receipts did
+not record that setting, so that historical cap is not independently verified.
+Forty-two focused managed tests pass. No permanent machine/editor heap limit
+was installed.
+
+The subsequent independent-review repair restores CheckAdditionalContent in the
+stream JSON reader. A failing-before/passing-after regression plus the existing
+ingress tests pass (4 cases); native describe/restore reject appended content.
+The rebuilt DLL emits zero warnings/errors. Nine Material library revisions made
+with the old vector reader were replaced through the existing single-save tool.
+Nine fresh Unreal-native snapshots round-trip byte-exact; the old writer's output
+is not the reference for those checks. The 29 affected-input Material payloads
+restore, with all 20 untouched cases retaining their prior native hashes. Current
+source/DLL identities and the explicitly recorded 2 GiB repair-run environment
+are in TC5-LIB/CONVERTER-REPAIRS/REVIEW-REPAIRS.
+
 References: [Microsoft's warning guidance](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/fixing-warnings),
 [ILC/ILLink data formats](https://github.com/dotnet/runtime/blob/main/docs/tools/illink/data-formats.md),
 [Json.NET 13.0.4 AOT reflection selection](https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.4/Src/Newtonsoft.Json/Serialization/JsonTypeReflector.cs).

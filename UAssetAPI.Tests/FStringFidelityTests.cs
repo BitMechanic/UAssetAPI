@@ -11,6 +11,19 @@ namespace UAssetAPI.Tests;
 public class FStringFidelityTests
 {
     [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RegistryStringsLargerThanArrayElementLimitRemainLossless(bool wide)
+    {
+        var original = new FString(new string('x', 1024 * 1024 + 7), wide ? Encoding.Unicode : Encoding.UTF8);
+        byte[] bytes = Payload(original);
+        using var reader = new UnrealBinaryReader(new MemoryStream(bytes));
+        var restored = reader.ReadFString();
+        Assert.AreEqual(original.Value, restored.Value);
+        CollectionAssert.AreEqual(bytes, Payload(restored));
+    }
+
+    [DataTestMethod]
     [DataRow("")]
     [DataRow("ASCII kept wide")]
     [DataRow("café")]
