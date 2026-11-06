@@ -19,7 +19,7 @@ public static unsafe class Exports
         new List<FNiagaraVariableCommonReference>()
     };
 
-    [UnmanagedCallersOnly(EntryPoint = "rct_uasset_abi_version", CallConvs = new[] { typeof(CallConvCdecl) })]
+    [UnmanagedCallersOnly(EntryPoint = "tc_uasset_abi_version", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Version() => 1;
 
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The exact enum converter constructor below is preserved for attributes; all asset model types are rooted. No open-ended reflection API is exposed by this C ABI.")]
@@ -38,7 +38,7 @@ public static unsafe class Exports
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors, typeof(KeyValuePair<FName, uint>))]
     // Niagara generated-function specifiers serialize the two public fields of this value tuple.
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicConstructors, typeof(ValueTuple<FName, FName>))]
-    [UnmanagedCallersOnly(EntryPoint = "rct_uasset_process", CallConvs = new[] { typeof(CallConvCdecl) })]
+    [UnmanagedCallersOnly(EntryPoint = "tc_uasset_process", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Process(int operation, byte* input, byte* output, byte* options, byte* error, int capacity)
     {
         if (error != null && capacity > 0) error[0] = 0;

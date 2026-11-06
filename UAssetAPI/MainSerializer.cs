@@ -95,7 +95,7 @@ namespace UAssetAPI
         /// <summary>
         /// Initializes the property type registry.
         /// </summary>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Model)]
         [UnconditionalSuppressMessage("Trimming", "IL2062", Justification = AotContract.Model)]
         [UnconditionalSuppressMessage("Trimming", "IL2064", Justification = AotContract.Model)]
@@ -533,7 +533,7 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the FProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
 #endif
         public static FProperty ReadFProperty(AssetBinaryReader reader)
@@ -564,7 +564,7 @@ namespace UAssetAPI
         /// <param name="reader">The BinaryReader to read from. The underlying stream should be at the position of the UProperty to be read.</param>
         /// <param name="serializedType">The type of UProperty to be read.</param>
         /// <returns>The FProperty read from disk.</returns>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
 #endif
         public static UProperty ReadUProperty(AssetBinaryReader reader, FName serializedType)

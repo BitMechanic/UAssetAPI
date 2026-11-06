@@ -61,7 +61,7 @@ internal class TMapJsonConverter<TKey, TValue> : JsonConverter
 
     public override bool CanRead => true;
 
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
 #endif

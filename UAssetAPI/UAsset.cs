@@ -757,7 +757,7 @@ namespace UAssetAPI
             CustomVersionContainer = GetDefaultCustomVersionContainer(newVersion);
         }
 
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
 #endif
         public static EngineVersion GetEngineVersion(ObjectVersion objectVersion, ObjectVersionUE5 objectVersionUE5, List<CustomVersion> customVersionContainer)
@@ -945,7 +945,7 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="chosenVersion">The version of the engine to check against.</param>
         /// <returns>A list of all the default custom version values for the given engine version.</returns>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2057", Justification = AotContract.Model)]
 #endif
         public static List<CustomVersion> GetDefaultCustomVersionContainer(EngineVersion chosenVersion)
@@ -1151,7 +1151,7 @@ namespace UAssetAPI
 
         internal static JsonSerializerSettings jsonSettings = CreateJsonSettings();
 
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
 #endif
@@ -3271,7 +3271,7 @@ namespace UAssetAPI
         /// </summary>
         /// <param name="jsonFormatting">The formatting to use for the returned JSON string.</param>
         /// <returns>A serialized JSON string that represents the asset.</returns>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
 #endif
@@ -3362,7 +3362,7 @@ namespace UAssetAPI
         /// Reads an asset from serialized JSON and initializes a new instance of the <see cref="UAsset"/> class to store its data in memory.
         /// </summary>
         /// <param name="json">A serialized JSON string to parse.</param>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
 #endif
@@ -3418,7 +3418,7 @@ namespace UAssetAPI
         /// Reads an asset from serialized JSON and initializes a new instance of the <see cref="UAsset"/> class to store its data in memory.
         /// </summary>
         /// <param name="stream">A stream containing serialized JSON string to parse.</param>
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
         [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = AotContract.Json)]
         [UnconditionalSuppressMessage("AOT", "IL3050", Justification = AotContract.Json)]
 #endif

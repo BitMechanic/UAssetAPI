@@ -5,13 +5,13 @@
     <NativeLib>Shared</NativeLib>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>RCTUAssetBridge</AssemblyName>
+    <AssemblyName>TCUAssetBridge</AssemblyName>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
     <IlcGenerateStackTraceData>true</IlcGenerateStackTraceData>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../UAssetAPI/UAssetAPI.csproj" AdditionalProperties="RCTNativeBridge=true" />
+    <ProjectReference Include="../UAssetAPI/UAssetAPI.csproj" AdditionalProperties="TCNativeBridge=true" />
     <!-- JSON contains polymorphic library types. Preserve their reflection metadata. -->
     <TrimmerRootAssembly Include="UAssetAPI" />
     <IlcArg Include="--substitution:$(MSBuildProjectDirectory)/Aot.Substitutions.xml" />

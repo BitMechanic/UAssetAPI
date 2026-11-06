@@ -1,4 +1,4 @@
-#if RCT_NATIVE_BRIDGE
+#if TC_NATIVE_BRIDGE
 namespace UAssetAPI;
 
 // Compiled only for the native bridge, whose project roots the complete model.
